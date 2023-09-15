@@ -2,7 +2,7 @@
 
 <img width="1368" alt="Screenshot epic stack in french" src="https://github.com/rperon/epic-stack-with-i18n/assets/692098/0cdca101-1a67-4d53-89a9-d6287564372f">
 
-This demonstrates how to use [i18next](https://https://www.i18next.com/) and
+This demonstrates how to use [i18next](https://www.i18next.com/) and
 [remix-i18next](https://github.com/sergiodxa/remix-i18next) with the
 [Epic Stack](https://github.com/epicweb-dev/epic-stack). It includes a dropdown
 menu to switch from one language to an another.
