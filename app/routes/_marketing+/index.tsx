@@ -1,4 +1,5 @@
 import { type V2_MetaFunction } from '@remix-run/node'
+import { useTranslation } from 'react-i18next'
 import {
 	Tooltip,
 	TooltipContent,
@@ -10,6 +11,7 @@ import { logos, stars } from './logos/logos.ts'
 export const meta: V2_MetaFunction = () => [{ title: 'Epic Notes' }]
 
 export default function Index() {
+	const { t } = useTranslation()
 	return (
 		<main className="relative min-h-screen sm:flex sm:items-center sm:justify-center">
 			<div className="relative sm:pb-16 sm:pt-8">
@@ -42,14 +44,14 @@ export default function Index() {
 								</a>
 							</h1>
 							<p className="mx-auto mt-6 max-w-lg text-center text-xl text-white sm:max-w-3xl">
-								Check the{' '}
+								{t('marketing.title.start')}{' '}
 								<a
 									className="underline"
 									href="https://github.com/epicweb-dev/epic-stack/blob/main/docs/getting-started.md"
 								>
-									Getting Started
+									{t('marketing.title.middle')}
 								</a>{' '}
-								guide file for how to get your project off the ground!
+								{t('marketing.title.end')}
 							</p>
 						</div>
 					</div>

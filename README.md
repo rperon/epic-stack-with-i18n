@@ -1,54 +1,38 @@
-<div align="center">
-  <h1 align="center"><a href="https://www.epicweb.dev/epic-stack">The Epic Stack 🚀</a></h1>
-  <strong align="center">
-    Ditch analysis paralysis and start shipping Epic Web apps.
-  </strong>
-  <p>
-    This is an opinionated project starter and reference that allows teams to
-    ship their ideas to production faster and on a more stable foundation based
-    on the experience of <a href="https://kentcdodds.com">Kent C. Dodds</a> and
-    <a href="https://github.com/epicweb-dev/epic-stack/graphs/contributors">contributors</a>.
-  </p>
-</div>
+# [Epic Stack](https://github.com/epicweb-dev/epic-stack) with [i18next](https://https://www.i18next.com) and [remix-i18next](https://github.com/sergiodxa/remix-i18next)
 
-```sh
-npx create-remix@latest --typescript --install --template epicweb-dev/epic-stack
-```
+This demonstrates how to use [i18next](https://https://www.i18next.com/) and
+[remix-i18next](https://github.com/sergiodxa/remix-i18next) with the
+[Epic Stack](https://github.com/epicweb-dev/epic-stack). It includes a dropdown
+menu to switch from one language to an another.
 
-[![The Epic Stack](https://github-production-user-asset-6210df.s3.amazonaws.com/1500684/246885449-1b00286c-aa3d-44b2-9ef2-04f694eb3592.png)](https://www.epicweb.dev/epic-stack)
+This exemple is based on the usage of a cookie to save the user language but
+there is other way to do so, like saving the language in the user object or
+using the url.
 
-[The Epic Stack](https://www.epicweb.dev/epic-stack)
+To check out the changes, check [the git commit history](). The important parts
+are:
 
-<hr />
-
-## Watch Kent's Introduction to The Epic Stack
-
-[![screenshot of a YouTube video](https://github-production-user-asset-6210df.s3.amazonaws.com/1500684/242088051-6beafa78-41c6-47e1-b999-08d3d3e5cb57.png)](https://www.youtube.com/watch?v=yMK5SVRASxM)
-
-["The Epic Stack" by Kent C. Dodds at #RemixConf 2023 💿](https://www.youtube.com/watch?v=yMK5SVRASxM)
-
-## Docs
-
-[Read the docs](https://github.com/epicweb-dev/epic-stack/blob/main/docs)
-(please 🙏).
-
-## Support
-
-- 🆘 Join the
-  [discussion on GitHub](https://github.com/epicweb-dev/epic-stack/discussions)
-  and the [KCD Community on Discord](https://kcd.im/discord).
-- 💡 Create an
-  [idea discussion](https://github.com/epicweb-dev/epic-stack/discussions/new?category=ideas)
-  for suggestions.
-- 🐛 Open a [GitHub issue](https://github.com/epicweb-dev/epic-stack/issues) to
-  report a bug.
-
-## Branding
-
-Want to talk about the Epic Stack in a blog post or talk? Great! Here are some
-assets you can use in your material:
-[EpicWeb.dev/brand](https://epicweb.dev/brand)
-
-## Thanks
-
-You rock 🪨
+1. Update on `entry.client.tsx` and `entry.server.tsx` to add language browser
+   detection, on the client and the server.
+2. `app/utils/i18n.ts` contains default configuration and ability to change
+   language.
+3. `app/utils/i18n.server.ts` contains the initialisation of `remix-i18n`, it is
+   configured to use a cookie named `en_lang` to save the user language when the
+   user switch language. This cookie is used for ssr, to create an html with the
+   right `lang` like this `<html lang="fr" ... >` inside the `root.tsx`.
+4. Inside `root.tsx`, i added a dropdown menu to let the user switch language.
+   I'm also retrieving in the loader the current locale.
+5. To change the language, a Form is send to `/change-language/${lang}` where i
+   set the cookie.
+6. The translation files are located in `public/locales/${lang}/common.json`.
+   i18next support multiple namespaces for storing the translation. In this
+   example, i'm only using one named `common` as the default namespace.
+7. Inside a React function, you can translate string by using the hook
+   `useTranslation` from `react-18next`. This hook export a `t` function that
+   can be used like this `t('marketing.title.start')`. `_marketing+/index.tsx`
+   contains an exemple.
+8. Inside a loader or action function you can use your instance of RemixI18Next
+   to get your translation like this :
+   `const t = await i18next.getFixedT(request)`. Then you can use the `t`
+   function like this `t('auth.invalidUsernameOrPassword')`. An example is
+   available in `_auth+/login.tsx`.

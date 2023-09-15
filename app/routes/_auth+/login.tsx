@@ -25,6 +25,7 @@ import {
 	providerNames,
 } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
+import { i18next } from '#app/utils/i18next.server.ts'
 import {
 	combineResponseInits,
 	invariant,
@@ -188,6 +189,7 @@ export async function loader({ request }: DataFunctionArgs) {
 
 export async function action({ request }: DataFunctionArgs) {
 	await requireAnonymous(request)
+	const t = await i18next.getFixedT(request)
 	const formData = await request.formData()
 	const submission = await parse(formData, {
 		schema: intent =>
@@ -198,7 +200,7 @@ export async function action({ request }: DataFunctionArgs) {
 				if (!session) {
 					ctx.addIssue({
 						code: 'custom',
-						message: 'Invalid username or password',
+						message: t('auth.invalidUsernameOrPassword'),
 					})
 					return z.NEVER
 				}

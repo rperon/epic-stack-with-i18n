@@ -6,6 +6,7 @@ import { flatRoutes } from 'remix-flat-routes'
 export default {
 	cacheDirectory: './node_modules/.cache/remix',
 	ignoredRouteFiles: ['**/*'],
+	serverDependenciesToBundle: ['remix-i18next'],
 	serverModuleFormat: 'esm',
 	serverPlatform: 'node',
 	tailwind: true,

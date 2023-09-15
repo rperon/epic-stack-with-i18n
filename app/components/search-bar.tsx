@@ -1,4 +1,5 @@
 import { Form, useSearchParams, useSubmit } from '@remix-run/react'
+import { useTranslation } from 'react-i18next'
 import { useDebounce, useIsPending } from '#app/utils/misc.tsx'
 import { Icon } from './ui/icon.tsx'
 import { Input } from './ui/input.tsx'
@@ -20,6 +21,7 @@ export function SearchBar({
 		formMethod: 'GET',
 		formAction: '/users',
 	})
+	const { t } = useTranslation()
 
 	const handleFormChange = useDebounce((form: HTMLFormElement) => {
 		submit(form)
@@ -34,14 +36,14 @@ export function SearchBar({
 		>
 			<div className="flex-1">
 				<Label htmlFor="search" className="sr-only">
-					Search
+					{t('search')}
 				</Label>
 				<Input
 					type="search"
 					name="search"
 					id="search"
 					defaultValue={searchParams.get('search') ?? ''}
-					placeholder="Search"
+					placeholder={t('search')}
 					className="w-full"
 					autoFocus={autoFocus}
 				/>
@@ -54,7 +56,7 @@ export function SearchBar({
 					size="sm"
 				>
 					<Icon name="magnifying-glass" size="sm" />
-					<span className="sr-only">Search</span>
+					<span className="sr-only">{t('search')}</span>
 				</StatusButton>
 			</div>
 		</Form>

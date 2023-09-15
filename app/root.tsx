@@ -25,6 +25,7 @@ import {
 } from '@remix-run/react'
 import { withSentry } from '@sentry/remix'
 import { useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { Confetti } from './components/confetti.tsx'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
@@ -37,6 +38,9 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuPortal,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from './components/ui/dropdown-menu.tsx'
 import { Icon, href as iconsHref } from './components/ui/icon.tsx'
@@ -47,6 +51,8 @@ import { ClientHintCheck, getHints, useHints } from './utils/client-hints.tsx'
 import { getConfetti } from './utils/confetti.server.ts'
 import { prisma } from './utils/db.server.ts'
 import { getEnv } from './utils/env.server.ts'
+import i18n from './utils/i18n.ts'
+import { i18next } from './utils/i18next.server.ts'
 import {
 	combineHeaders,
 	getDomainUrl,
@@ -95,6 +101,14 @@ export const meta: V2_MetaFunction<typeof loader> = ({ data }) => {
 	]
 }
 
+export const handle = {
+	// In the handle export, we can add a i18n key with namespaces our route
+	// will need to load. This key can be a single string or an array of strings.
+	// TIP: In most cases, you should set this to your defaultNS from your i18n config
+	// or if you did not set one, set it to the i18next default namespace "translation"
+	i18n: 'common',
+}
+
 export async function loader({ request }: DataFunctionArgs) {
 	const timings = makeTimings('root loader')
 	const userId = await time(() => getUserId(request), {
@@ -102,6 +116,7 @@ export async function loader({ request }: DataFunctionArgs) {
 		type: 'getUserId',
 		desc: 'getUserId in root',
 	})
+	const locale = await i18next.getLocale(request)
 
 	const user = userId
 		? await time(
@@ -142,6 +157,7 @@ export async function loader({ request }: DataFunctionArgs) {
 				hints: getHints(request),
 				origin: getDomainUrl(request),
 				path: new URL(request.url).pathname,
+				locale,
 				userPrefs: {
 					theme: getTheme(request),
 				},
@@ -199,15 +215,17 @@ function Document({
 	children,
 	nonce,
 	theme = 'light',
+	locale = i18n.fallbackLng,
 	env = {},
 }: {
 	children: React.ReactNode
 	nonce: string
 	theme?: Theme
+	locale?: string
 	env?: Record<string, string>
 }) {
 	return (
-		<html lang="en" className={`${theme} h-full overflow-x-hidden`}>
+		<html lang={locale} className={`${theme} h-full overflow-x-hidden`}>
 			<head>
 				<ClientHintCheck nonce={nonce} />
 				<Meta />
@@ -238,9 +256,15 @@ function App() {
 	const theme = useTheme()
 	const matches = useMatches()
 	const isOnSearchPage = matches.find(m => m.id === 'routes/users+/index')
+	const { t } = useTranslation()
 
 	return (
-		<Document nonce={nonce} theme={theme} env={data.ENV}>
+		<Document
+			nonce={nonce}
+			theme={theme}
+			env={data.ENV}
+			locale={data.requestInfo.locale}
+		>
 			<div className="flex h-screen flex-col justify-between">
 				<header className="container py-6">
 					<nav className="flex items-center justify-between">
@@ -254,13 +278,16 @@ function App() {
 							</div>
 						)}
 						<div className="flex items-center gap-10">
-							{user ? (
-								<UserDropdown />
-							) : (
-								<Button asChild variant="default" size="sm">
-									<Link to="/login">Log In</Link>
-								</Button>
-							)}
+							<>
+								<LanguageDropDown />
+								{user ? (
+									<UserDropdown />
+								) : (
+									<Button asChild variant="default" size="sm">
+										<Link to="/login">{t('root.login')}</Link>
+									</Button>
+								)}
+							</>
 						</div>
 					</nav>
 				</header>
@@ -288,6 +315,7 @@ function UserDropdown() {
 	const user = useUser()
 	const submit = useSubmit()
 	const formRef = useRef<HTMLFormElement>(null)
+	const { t } = useTranslation()
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
@@ -314,14 +342,14 @@ function UserDropdown() {
 					<DropdownMenuItem asChild>
 						<Link prefetch="intent" to={`/users/${user.username}`}>
 							<Icon className="text-body-md" name="avatar">
-								Profile
+								{t('root.profile')}
 							</Icon>
 						</Link>
 					</DropdownMenuItem>
 					<DropdownMenuItem asChild>
 						<Link prefetch="intent" to={`/users/${user.username}/notes`}>
 							<Icon className="text-body-md" name="pencil-2">
-								Notes
+								{t('root.notes')}
 							</Icon>
 						</Link>
 					</DropdownMenuItem>
@@ -335,12 +363,44 @@ function UserDropdown() {
 					>
 						<Form action="/logout" method="POST" ref={formRef}>
 							<Icon className="text-body-md" name="exit">
-								<button type="submit">Logout</button>
+								<button type="submit">{t('root.logout')}</button>
 							</Icon>
 						</Form>
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenuPortal>
+		</DropdownMenu>
+	)
+}
+
+function LanguageDropDown() {
+	const { t, i18n } = useTranslation()
+	const submit = useSubmit()
+
+	const onValueChange = (lang: string) => {
+		i18n.changeLanguage(lang)
+		submit(null, { method: 'POST', action: `/change-language/${lang}` })
+	}
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="secondary"> {t('root.language')} </Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent>
+				<DropdownMenuSeparator />
+				<DropdownMenuRadioGroup
+					value={i18n.language}
+					onValueChange={onValueChange}
+				>
+					<DropdownMenuRadioItem value="fr">
+						{t('root.french')}
+					</DropdownMenuRadioItem>
+					<DropdownMenuRadioItem value="en">
+						{t('root.english')}
+					</DropdownMenuRadioItem>
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
 		</DropdownMenu>
 	)
 }
