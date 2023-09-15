@@ -1,5 +1,7 @@
 # [Epic Stack](https://github.com/epicweb-dev/epic-stack) with [i18next](https://https://www.i18next.com) and [remix-i18next](https://github.com/sergiodxa/remix-i18next)
 
+<img width="1368" alt="Screenshot epic stack in french" src="https://github.com/rperon/epic-stack-with-i18n/assets/692098/0cdca101-1a67-4d53-89a9-d6287564372f">
+
 This demonstrates how to use [i18next](https://https://www.i18next.com/) and
 [remix-i18next](https://github.com/sergiodxa/remix-i18next) with the
 [Epic Stack](https://github.com/epicweb-dev/epic-stack). It includes a dropdown
@@ -9,7 +11,7 @@ This exemple is based on the usage of a cookie to save the user language but
 there is other way to do so, like saving the language in the user object or
 using the url.
 
-To check out the changes, check [the git commit history](). The important parts
+To check out the changes, check [the git commit history](https://github.com/rperon/epic-stack-with-i18n/commit/378d9b713450a885783dc017432842fe019f39cf). The important parts
 are:
 
 1. Update on `entry.client.tsx` and `entry.server.tsx` to add language browser
