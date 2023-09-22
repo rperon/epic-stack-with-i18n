@@ -1,5 +1,6 @@
 import { useInputEvent } from '@conform-to/react'
 import React, { useId, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Checkbox, type CheckboxProps } from './ui/checkbox.tsx'
 import { Input } from './ui/input.tsx'
 import { Label } from './ui/label.tsx'
@@ -14,13 +15,15 @@ export function ErrorList({
 	errors?: ListOfErrors
 	id?: string
 }) {
+	const { t } = useTranslation()
+	console.log(errors)
 	const errorsToRender = errors?.filter(Boolean)
 	if (!errorsToRender?.length) return null
 	return (
 		<ul id={id} className="flex flex-col gap-1">
 			{errorsToRender.map(e => (
 				<li key={e} className="text-[10px] text-foreground-danger">
-					{e}
+					{t(e)}
 				</li>
 			))}
 		</ul>
