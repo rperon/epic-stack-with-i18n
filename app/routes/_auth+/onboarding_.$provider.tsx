@@ -27,6 +27,7 @@ import {
 import { redirectWithConfetti } from '#app/utils/confetti.server.ts'
 import { ProviderNameSchema } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
+import { i18next } from '#app/utils/i18next.server.ts'
 import { invariant, useIsPending } from '#app/utils/misc.tsx'
 import { sessionStorage } from '#app/utils/session.server.ts'
 import { NameSchema, UsernameSchema } from '#app/utils/user-validation.ts'
@@ -77,6 +78,7 @@ async function requireData({
 }
 
 export async function loader({ request, params }: DataFunctionArgs) {
+	const t = await i18next.getFixedT(request)
 	const { email } = await requireData({ request, params })
 	const cookieSession = await sessionStorage.getSession(
 		request.headers.get('cookie'),
@@ -90,6 +92,11 @@ export async function loader({ request, params }: DataFunctionArgs) {
 
 	return json({
 		email,
+		meta: {
+			title: t('meta.onboarding.title', {
+				defaultValue: 'Setup Epic Notes Account',
+			}),
+		},
 		formError: typeof formError === 'string' ? formError : null,
 		status: 'idle',
 		submission: {
@@ -182,8 +189,8 @@ export async function handleVerification({
 	})
 }
 
-export const meta: V2_MetaFunction = () => {
-	return [{ title: 'Setup Epic Notes Account' }]
+export const meta: V2_MetaFunction<typeof loader> = ({ data }) => {
+	return [{ title: data?.meta.title }]
 }
 
 export default function SignupRoute() {

@@ -184,7 +184,8 @@ const LoginFormSchema = z.object({
 
 export async function loader({ request }: DataFunctionArgs) {
 	await requireAnonymous(request)
-	return json({})
+	const t = await i18next.getFixedT(request)
+	return json({ meta: { title: t('meta.login.title') } })
 }
 
 export async function action({ request }: DataFunctionArgs) {
@@ -346,8 +347,8 @@ export default function LoginPage() {
 	)
 }
 
-export const meta: V2_MetaFunction = () => {
-	return [{ title: 'Login to Epic Notes' }]
+export const meta: V2_MetaFunction<typeof loader> = ({ data }) => {
+	return [{ title: data?.meta.title }]
 }
 
 export function ErrorBoundary() {

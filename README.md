@@ -11,8 +11,9 @@ This exemple is based on the usage of a cookie to save the user language but
 there is other way to do so, like saving the language in the user object or
 using the url.
 
-To check out the changes, check [the git commit history](https://github.com/rperon/epic-stack-with-i18n/commit/378d9b713450a885783dc017432842fe019f39cf). The important parts
-are:
+To check out the changes, check
+[the git commit history](https://github.com/rperon/epic-stack-with-i18n/commit/378d9b713450a885783dc017432842fe019f39cf).
+The important parts are:
 
 1. Update on `entry.client.tsx` and `entry.server.tsx` to add language browser
    detection, on the client and the server.
@@ -38,3 +39,19 @@ are:
    `const t = await i18next.getFixedT(request)`. Then you can use the `t`
    function like this `t('auth.invalidUsernameOrPassword')`. An example is
    available in `_auth+/login.tsx`.
+
+Update 22/09/2023 :
+
+- I added the [i18next-parser](https://github.com/i18next/i18next-parser)
+  library which parse your code and add it the common message. You can configure
+  it inside the `i18next-parser.config.js` file
+
+- inside `app/utils/user-validation.ts`, i've added an example of how we can
+  translate zod schema. I'm sending the translation key for each zod
+  requirements. The translation key is then translated in the ErrorList
+  component. I'm using comments inside `user-validation`, to help
+  i18next-parser. See https://github.com/i18next/i18next-parser#caveats
+
+- For meta translation, i'm doing the translation inside the loader and using
+  that value in the MetaFunction. Example in the files : `forgot-passwords.tsx`,
+  `login.tsx`...

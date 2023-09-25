@@ -1,14 +1,41 @@
 {
-  "auth.invalidUsernameOrPassword": "Nom d'utilisateur ou mot de passe incorrect",
-  "marketing.title.start": "Consulter le fichier",
-  "marketing.title.middle": "Getting Started",
-  "marketing.title.end": "pour savoir comment lancer votre projet !",
-  "root.login": "Se connecter",
-  "root.language": "Changer de langue",
-  "root.french": "Français",
-  "root.english": "Anglais",
-  "root.profile": "Profil",
-  "root.logout": "Se déconnecter",
-  "root.notes": "Notes",
+  "auth": {
+    "invalidUsernameOrPassword": "Nom d'utilisateur ou mot de passe incorrect"
+  },
+  "form": {
+    "user": {
+      "invalidCharacters": "Le nom d'utilisateur ne peut contenir que des lettres, des chiffres et des tirets",
+      "required": "Le nom d'utilisateur est requis",
+      "tooLong": "Le nom d'utilisateur est trop long",
+      "tooShort": "Le nom d'utilisateur est trop court"
+    }
+  },
+  "marketing": {
+    "title": {
+      "end": "pour savoir comment lancer votre projet !",
+      "middle": "Getting Started",
+      "start": "Consulter le fichier"
+    }
+  },
+  "meta": {
+    "forgotPassword": {
+      "title": "Récupération de mot de passe pour Epic Notes"
+    },
+    "login": {
+      "title": "Se connecter à Epic Notes"
+    },
+    "onboarding": {
+      "title": "Configurer le compte Epic Notes"
+    }
+  },
+  "root": {
+    "english": "Anglais",
+    "french": "Français",
+    "language": "Changer de langue",
+    "login": "Se connecter",
+    "logout": "Se déconnecter",
+    "notes": "Notes",
+    "profile": "Profil"
+  },
   "search": "Rechercher"
 }

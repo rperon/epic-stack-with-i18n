@@ -1,14 +1,41 @@
 {
-  "auth.invalidUsernameOrPassword": "Invalid username or password",
-  "marketing.title.start": "Check the",
-  "marketing.title.middle": "Getting Started",
-  "marketing.title.end": "guide file for how to get your project off the ground!",
-  "root.login": "Log in",
-  "root.language": "Switch language",
-  "root.french": "French",
-  "root.english": "English",
-  "root.profile": "Profile",
-  "root.logout": "Logout",
-  "root.notes": "Notes",
+  "auth": {
+    "invalidUsernameOrPassword": "Invalid username or password"
+  },
+  "form": {
+    "user": {
+      "invalidCharacters": "Username can only contain letters, numbers, and underscores",
+      "required": "Username is required",
+      "tooLong": "Username is too long",
+      "tooShort": "Username is too short"
+    }
+  },
+  "marketing": {
+    "title": {
+      "end": "guide file for how to get your project off the ground!",
+      "middle": "Getting Started",
+      "start": "Check the"
+    }
+  },
+  "meta": {
+    "forgotPassword": {
+      "title": "Password Recovery for Epic Notes"
+    },
+    "login": {
+      "title": "Login to Epic Notes"
+    },
+    "onboarding": {
+      "title": "Setup Epic Notes Account"
+    }
+  },
+  "root": {
+    "english": "English",
+    "french": "French",
+    "language": "Switch language",
+    "login": "Log in",
+    "logout": "Logout",
+    "notes": "Notes",
+    "profile": "Profile"
+  },
   "search": "Search"
 }

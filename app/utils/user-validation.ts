@@ -1,11 +1,20 @@
 import { z } from 'zod'
 
+/**
+ * User validation runtime translation keys
+ * https://github.com/i18next/i18next-parser#caveats
+ *
+ * t('form.user.required')
+ * t('form.user.tooShort')
+ * t('form.user.tooLong')
+ * t('form.user.invalidCharacters')
+ */
 export const UsernameSchema = z
-	.string({ required_error: 'Username is required' })
-	.min(3, { message: 'Username is too short' })
-	.max(20, { message: 'Username is too long' })
+	.string({ required_error: 'form.user.required' })
+	.min(3, { message: 'form.user.tooShort' })
+	.max(20, { message: 'form.user.tooLong' })
 	.regex(/^[a-zA-Z0-9_]+$/, {
-		message: 'Username can only include letters, numbers, and underscores',
+		message: 'form.user.invalidCharacters',
 	})
 	// users can type the username in any case, but we store it in lowercase
 	.transform(value => value.toLowerCase())

@@ -14,12 +14,20 @@ import { ErrorList, Field } from '#app/components/forms.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { prisma } from '#app/utils/db.server.ts'
 import { sendEmail } from '#app/utils/email.server.ts'
+import { i18next } from '#app/utils/i18next.server.ts'
 import { EmailSchema, UsernameSchema } from '#app/utils/user-validation.ts'
 import { prepareVerification } from './verify.tsx'
 
 const ForgotPasswordSchema = z.object({
 	usernameOrEmail: z.union([EmailSchema, UsernameSchema]),
 })
+
+export async function loader({ request }: DataFunctionArgs) {
+	const t = await i18next.getFixedT(request)
+	const title = t('meta.forgotPassword.title')
+
+	return json({ meta: { title } })
+}
 
 export async function action({ request }: DataFunctionArgs) {
 	const formData = await request.formData()
@@ -108,8 +116,8 @@ function ForgotPasswordEmail({
 	)
 }
 
-export const meta: V2_MetaFunction = () => {
-	return [{ title: 'Password Recovery for Epic Notes' }]
+export const meta: V2_MetaFunction<typeof loader> = ({ data }) => {
+	return [{ title: data?.meta.title }]
 }
 
 export default function ForgotPasswordRoute() {
