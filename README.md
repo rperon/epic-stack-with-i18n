@@ -12,7 +12,7 @@ there is other way to do so, like saving the language in the user object or
 using the url.
 
 To check out the changes, check
-[the git commit history](https://github.com/rperon/epic-stack-with-i18n/commit/378d9b713450a885783dc017432842fe019f39cf).
+[the git commit history](https://github.com/rperon/epic-stack-with-i18n/commit/052f19716e210dbed8bcac64e8d82021f5506c5b).
 The important parts are:
 
 1. Update on `entry.client.tsx` and `entry.server.tsx` to add language browser
