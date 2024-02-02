@@ -1,6 +1,12 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
-import { json, redirect, type DataFunctionArgs } from '@remix-run/node'
+import { getFormProps, getInputProps, useForm } from '@conform-to/react'
+import { getZodConstraint, parseWithZod } from '@conform-to/zod'
+import { invariantResponse } from '@epic-web/invariant'
+import { type SEOHandle } from '@nasa-gcn/remix-seo'
+import {
+	json,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
+} from '@remix-run/node'
 import { Link, useFetcher, useLoaderData } from '@remix-run/react'
 import { z } from 'zod'
 import { ErrorList, Field } from '#app/components/forms.tsx'
@@ -9,21 +15,22 @@ import { Icon } from '#app/components/ui/icon.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { requireUserId, sessionKey } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
-import {
-	getUserImgSrc,
-	invariantResponse,
-	useDoubleCheck,
-} from '#app/utils/misc.tsx'
-import { sessionStorage } from '#app/utils/session.server.ts'
+import { getUserImgSrc, useDoubleCheck } from '#app/utils/misc.tsx'
+import { authSessionStorage } from '#app/utils/session.server.ts'
+import { redirectWithToast } from '#app/utils/toast.server.ts'
 import { NameSchema, UsernameSchema } from '#app/utils/user-validation.ts'
 import { twoFAVerificationType } from './profile.two-factor.tsx'
+
+export const handle: SEOHandle = {
+	getSitemapEntries: () => null,
+}
 
 const ProfileFormSchema = z.object({
 	name: NameSchema.optional(),
 	username: UsernameSchema,
 })
 
-export async function loader({ request }: DataFunctionArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 	const userId = await requireUserId(request)
 	const user = await prisma.user.findUniqueOrThrow({
 		where: { id: userId },
@@ -73,7 +80,7 @@ const profileUpdateActionIntent = 'update-profile'
 const signOutOfSessionsActionIntent = 'sign-out-of-sessions'
 const deleteDataActionIntent = 'delete-data'
 
-export async function action({ request }: DataFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 	const userId = await requireUserId(request)
 	const formData = await request.formData()
 	const intent = formData.get('intent')
@@ -123,7 +130,7 @@ export default function EditUserProfile() {
 			</div>
 			<UpdateProfile />
 
-			<div className="col-span-6 mb-12 mt-6 h-1 border-b-[1.5px]" />
+			<div className="col-span-6 my-6 h-1 border-b-[1.5px] border-foreground" />
 			<div className="col-span-full flex flex-col gap-6">
 				<div>
 					<Link to="change-email">
@@ -170,7 +177,7 @@ export default function EditUserProfile() {
 }
 
 async function profileUpdateAction({ userId, formData }: ProfileActionArgs) {
-	const submission = await parse(formData, {
+	const submission = await parseWithZod(formData, {
 		async: true,
 		schema: ProfileFormSchema.superRefine(async ({ username }, ctx) => {
 			const existingUsername = await prisma.user.findUnique({
@@ -180,17 +187,17 @@ async function profileUpdateAction({ userId, formData }: ProfileActionArgs) {
 			if (existingUsername && existingUsername.id !== userId) {
 				ctx.addIssue({
 					path: ['username'],
-					code: 'custom',
+					code: z.ZodIssueCode.custom,
 					message: 'A user already exists with this username',
 				})
 			}
 		}),
 	})
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success') {
+		return json(
+			{ result: submission.reply() },
+			{ status: submission.status === 'error' ? 400 : 200 },
+		)
 	}
 
 	const data = submission.value
@@ -204,7 +211,9 @@ async function profileUpdateAction({ userId, formData }: ProfileActionArgs) {
 		},
 	})
 
-	return json({ status: 'success', submission } as const)
+	return json({
+		result: submission.reply(),
+	})
 }
 
 function UpdateProfile() {
@@ -214,20 +223,19 @@ function UpdateProfile() {
 
 	const [form, fields] = useForm({
 		id: 'edit-profile',
-		constraint: getFieldsetConstraint(ProfileFormSchema),
-		lastSubmission: fetcher.data?.submission,
+		constraint: getZodConstraint(ProfileFormSchema),
+		lastResult: fetcher.data?.result,
 		onValidate({ formData }) {
-			return parse(formData, { schema: ProfileFormSchema })
+			return parseWithZod(formData, { schema: ProfileFormSchema })
 		},
 		defaultValue: {
 			username: data.user.username,
-			name: data.user.name ?? '',
-			email: data.user.email,
+			name: data.user.name,
 		},
 	})
 
 	return (
-		<fetcher.Form method="POST" {...form.props}>
+		<fetcher.Form method="POST" {...getFormProps(form)}>
 			<div className="grid grid-cols-6 gap-x-10">
 				<Field
 					className="col-span-3"
@@ -235,13 +243,13 @@ function UpdateProfile() {
 						htmlFor: fields.username.id,
 						children: 'Username',
 					}}
-					inputProps={conform.input(fields.username)}
+					inputProps={getInputProps(fields.username, { type: 'text' })}
 					errors={fields.username.errors}
 				/>
 				<Field
 					className="col-span-3"
 					labelProps={{ htmlFor: fields.name.id, children: 'Name' }}
-					inputProps={conform.input(fields.name)}
+					inputProps={getInputProps(fields.name, { type: 'text' })}
 					errors={fields.name.errors}
 				/>
 			</div>
@@ -254,11 +262,7 @@ function UpdateProfile() {
 					size="wide"
 					name="intent"
 					value={profileUpdateActionIntent}
-					status={
-						fetcher.state !== 'idle'
-							? 'pending'
-							: fetcher.data?.status ?? 'idle'
-					}
+					status={fetcher.state !== 'idle' ? 'pending' : form.status ?? 'idle'}
 				>
 					Save changes
 				</StatusButton>
@@ -268,10 +272,10 @@ function UpdateProfile() {
 }
 
 async function signOutOfSessionsAction({ request, userId }: ProfileActionArgs) {
-	const cookieSession = await sessionStorage.getSession(
+	const authSession = await authSessionStorage.getSession(
 		request.headers.get('cookie'),
 	)
-	const sessionId = cookieSession.get(sessionKey)
+	const sessionId = authSession.get(sessionKey)
 	invariantResponse(
 		sessionId,
 		'You must be authenticated to sign out of other sessions',
@@ -324,7 +328,11 @@ function SignOutOfSessions() {
 
 async function deleteDataAction({ userId }: ProfileActionArgs) {
 	await prisma.user.delete({ where: { id: userId } })
-	return redirect('/')
+	return redirectWithToast('/', {
+		type: 'success',
+		title: 'Data Deleted',
+		description: 'All of your data has been deleted',
+	})
 }
 
 function DeleteData() {

@@ -1,10 +1,12 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getFormProps, getInputProps, useForm } from '@conform-to/react'
+import { getZodConstraint, parseWithZod } from '@conform-to/zod'
+import { invariant } from '@epic-web/invariant'
 import {
 	json,
 	redirect,
-	type DataFunctionArgs,
-	type V2_MetaFunction,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
+	type MetaFunction,
 } from '@remix-run/node'
 import {
 	Form,
@@ -12,19 +14,21 @@ import {
 	useLoaderData,
 	useSearchParams,
 } from '@remix-run/react'
-import { safeRedirect } from 'remix-utils'
+import { HoneypotInputs } from 'remix-utils/honeypot/react'
+import { safeRedirect } from 'remix-utils/safe-redirect'
 import { z } from 'zod'
 import { CheckboxField, ErrorList, Field } from '#app/components/forms.tsx'
 import { Spacer } from '#app/components/spacer.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { requireAnonymous, sessionKey, signup } from '#app/utils/auth.server.ts'
-import { redirectWithConfetti } from '#app/utils/confetti.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
-import { invariant, useIsPending } from '#app/utils/misc.tsx'
-import { sessionStorage } from '#app/utils/session.server.ts'
+import { checkHoneypot } from '#app/utils/honeypot.server.ts'
+import { useIsPending } from '#app/utils/misc.tsx'
+import { authSessionStorage } from '#app/utils/session.server.ts'
+import { redirectWithToast } from '#app/utils/toast.server.ts'
 import {
 	NameSchema,
-	PasswordSchema,
+	PasswordAndConfirmPasswordSchema,
 	UsernameSchema,
 } from '#app/utils/user-validation.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
@@ -36,8 +40,6 @@ const SignupFormSchema = z
 	.object({
 		username: UsernameSchema,
 		name: NameSchema,
-		password: PasswordSchema,
-		confirmPassword: PasswordSchema,
 		agreeToTermsOfServiceAndPrivacyPolicy: z.boolean({
 			required_error:
 				'You must agree to the terms of service and privacy policy',
@@ -45,15 +47,7 @@ const SignupFormSchema = z
 		remember: z.boolean().optional(),
 		redirectTo: z.string().optional(),
 	})
-	.superRefine(({ confirmPassword, password }, ctx) => {
-		if (confirmPassword !== password) {
-			ctx.addIssue({
-				path: ['confirmPassword'],
-				code: 'custom',
-				message: 'The passwords must match',
-			})
-		}
-	})
+	.and(PasswordAndConfirmPasswordSchema)
 
 async function requireOnboardingEmail(request: Request) {
 	await requireAnonymous(request)
@@ -66,55 +60,57 @@ async function requireOnboardingEmail(request: Request) {
 	}
 	return email
 }
-export async function loader({ request }: DataFunctionArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 	const email = await requireOnboardingEmail(request)
 	return json({ email })
 }
 
-export async function action({ request }: DataFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 	const email = await requireOnboardingEmail(request)
 	const formData = await request.formData()
-	const submission = await parse(formData, {
-		schema: SignupFormSchema.superRefine(async (data, ctx) => {
-			const existingUser = await prisma.user.findUnique({
-				where: { username: data.username },
-				select: { id: true },
-			})
-			if (existingUser) {
-				ctx.addIssue({
-					path: ['username'],
-					code: z.ZodIssueCode.custom,
-					message: 'A user already exists with this username',
+	checkHoneypot(formData)
+	const submission = await parseWithZod(formData, {
+		schema: intent =>
+			SignupFormSchema.superRefine(async (data, ctx) => {
+				const existingUser = await prisma.user.findUnique({
+					where: { username: data.username },
+					select: { id: true },
 				})
-				return
-			}
-		}).transform(async data => {
-			const session = await signup({ ...data, email })
-			return { ...data, session }
-		}),
+				if (existingUser) {
+					ctx.addIssue({
+						path: ['username'],
+						code: z.ZodIssueCode.custom,
+						message: 'A user already exists with this username',
+					})
+					return
+				}
+			}).transform(async data => {
+				if (intent !== null) return { ...data, session: null }
+
+				const session = await signup({ ...data, email })
+				return { ...data, session }
+			}),
 		async: true,
 	})
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value?.session) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value.session) {
+		return json(
+			{ result: submission.reply() },
+			{ status: submission.status === 'error' ? 400 : 200 },
+		)
 	}
 
 	const { session, remember, redirectTo } = submission.value
 
-	const cookieSession = await sessionStorage.getSession(
+	const authSession = await authSessionStorage.getSession(
 		request.headers.get('cookie'),
 	)
-	cookieSession.set(sessionKey, session.id)
-	const verifySession = await verifySessionStorage.getSession(
-		request.headers.get('cookie'),
-	)
+	authSession.set(sessionKey, session.id)
+	const verifySession = await verifySessionStorage.getSession()
 	const headers = new Headers()
 	headers.append(
 		'set-cookie',
-		await sessionStorage.commitSession(cookieSession, {
+		await authSessionStorage.commitSession(authSession, {
 			expires: remember ? session.expirationDate : undefined,
 		}),
 	)
@@ -123,17 +119,19 @@ export async function action({ request }: DataFunctionArgs) {
 		await verifySessionStorage.destroySession(verifySession),
 	)
 
-	return redirectWithConfetti(safeRedirect(redirectTo), { headers })
+	return redirectWithToast(
+		safeRedirect(redirectTo),
+		{ title: 'Welcome', description: 'Thanks for signing up!' },
+		{ headers },
+	)
 }
 
-export async function handleVerification({
-	request,
-	submission,
-}: VerifyFunctionArgs) {
-	invariant(submission.value, 'submission.value should be defined by now')
-	const verifySession = await verifySessionStorage.getSession(
-		request.headers.get('cookie'),
+export async function handleVerification({ submission }: VerifyFunctionArgs) {
+	invariant(
+		submission.status === 'success',
+		'Submission should be successful by now',
 	)
+	const verifySession = await verifySessionStorage.getSession()
 	verifySession.set(onboardingEmailSessionKey, submission.value.target)
 	return redirect('/onboarding', {
 		headers: {
@@ -142,7 +140,7 @@ export async function handleVerification({
 	})
 }
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
 	return [{ title: 'Setup Epic Notes Account' }]
 }
 
@@ -154,12 +152,12 @@ export default function SignupRoute() {
 	const redirectTo = searchParams.get('redirectTo')
 
 	const [form, fields] = useForm({
-		id: 'signup-form',
-		constraint: getFieldsetConstraint(SignupFormSchema),
+		id: 'onboarding-form',
+		constraint: getZodConstraint(SignupFormSchema),
 		defaultValue: { redirectTo },
-		lastSubmission: actionData?.submission,
+		lastResult: actionData?.result,
 		onValidate({ formData }) {
-			return parse(formData, { schema: SignupFormSchema })
+			return parseWithZod(formData, { schema: SignupFormSchema })
 		},
 		shouldRevalidate: 'onBlur',
 	})
@@ -176,13 +174,14 @@ export default function SignupRoute() {
 				<Spacer size="xs" />
 				<Form
 					method="POST"
-					className="mx-auto min-w-[368px] max-w-sm"
-					{...form.props}
+					className="mx-auto min-w-full max-w-sm sm:min-w-[368px]"
+					{...getFormProps(form)}
 				>
+					<HoneypotInputs />
 					<Field
 						labelProps={{ htmlFor: fields.username.id, children: 'Username' }}
 						inputProps={{
-							...conform.input(fields.username),
+							...getInputProps(fields.username, { type: 'text' }),
 							autoComplete: 'username',
 							className: 'lowercase',
 						}}
@@ -191,7 +190,7 @@ export default function SignupRoute() {
 					<Field
 						labelProps={{ htmlFor: fields.name.id, children: 'Name' }}
 						inputProps={{
-							...conform.input(fields.name),
+							...getInputProps(fields.name, { type: 'text' }),
 							autoComplete: 'name',
 						}}
 						errors={fields.name.errors}
@@ -199,7 +198,7 @@ export default function SignupRoute() {
 					<Field
 						labelProps={{ htmlFor: fields.password.id, children: 'Password' }}
 						inputProps={{
-							...conform.input(fields.password, { type: 'password' }),
+							...getInputProps(fields.password, { type: 'password' }),
 							autoComplete: 'new-password',
 						}}
 						errors={fields.password.errors}
@@ -211,7 +210,7 @@ export default function SignupRoute() {
 							children: 'Confirm Password',
 						}}
 						inputProps={{
-							...conform.input(fields.confirmPassword, { type: 'password' }),
+							...getInputProps(fields.confirmPassword, { type: 'password' }),
 							autoComplete: 'new-password',
 						}}
 						errors={fields.confirmPassword.errors}
@@ -223,7 +222,7 @@ export default function SignupRoute() {
 							children:
 								'Do you agree to our Terms of Service and Privacy Policy?',
 						}}
-						buttonProps={conform.input(
+						buttonProps={getInputProps(
 							fields.agreeToTermsOfServiceAndPrivacyPolicy,
 							{ type: 'checkbox' },
 						)}
@@ -234,17 +233,17 @@ export default function SignupRoute() {
 							htmlFor: fields.remember.id,
 							children: 'Remember me',
 						}}
-						buttonProps={conform.input(fields.remember, { type: 'checkbox' })}
+						buttonProps={getInputProps(fields.remember, { type: 'checkbox' })}
 						errors={fields.remember.errors}
 					/>
 
-					<input {...conform.input(fields.redirectTo, { type: 'hidden' })} />
+					<input {...getInputProps(fields.redirectTo, { type: 'hidden' })} />
 					<ErrorList errors={form.errors} id={form.errorId} />
 
 					<div className="flex items-center justify-between gap-6">
 						<StatusButton
 							className="w-full"
-							status={isPending ? 'pending' : actionData?.status ?? 'idle'}
+							status={isPending ? 'pending' : form.status ?? 'idle'}
 							type="submit"
 							disabled={isPending}
 						>

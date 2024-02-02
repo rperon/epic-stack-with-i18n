@@ -1,4 +1,9 @@
-import { json, type DataFunctionArgs } from '@remix-run/node'
+import { type SEOHandle } from '@nasa-gcn/remix-seo'
+import {
+	json,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
+} from '@remix-run/node'
 import { useFetcher } from '@remix-run/react'
 import { Icon } from '#app/components/ui/icon.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
@@ -7,18 +12,20 @@ import { requireUserId } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { useDoubleCheck } from '#app/utils/misc.tsx'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
+import { type BreadcrumbHandle } from './profile.tsx'
 import { twoFAVerificationType } from './profile.two-factor.tsx'
 
-export const handle = {
+export const handle: BreadcrumbHandle & SEOHandle = {
 	breadcrumb: <Icon name="lock-open-1">Disable</Icon>,
+	getSitemapEntries: () => null,
 }
 
-export async function loader({ request }: DataFunctionArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 	await requireRecentVerification(request)
 	return json({})
 }
 
-export async function action({ request }: DataFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 	await requireRecentVerification(request)
 	const userId = await requireUserId(request)
 	await prisma.verification.delete({
@@ -36,7 +43,7 @@ export default function TwoFactorDisableRoute() {
 
 	return (
 		<div className="mx-auto max-w-sm">
-			<disable2FAFetcher.Form method="POST" preventScrollReset>
+			<disable2FAFetcher.Form method="POST">
 				<p>
 					Disabling two factor authentication is not recommended. However, if
 					you would like to do so, click here:
