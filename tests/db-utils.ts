@@ -1,9 +1,8 @@
 import fs from 'node:fs'
 import { faker } from '@faker-js/faker'
+import { type PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { UniqueEnforcer } from 'enforce-unique'
-import { getPasswordHash } from '#app/utils/auth.server.ts'
-import { prisma } from '#app/utils/db.server.ts'
 
 const uniqueUsernameEnforcer = new UniqueEnforcer()
 
@@ -38,31 +37,6 @@ export function createPassword(password: string = faker.internet.password()) {
 	}
 }
 
-export const insertedUsers = new Set<string>()
-
-export async function insertNewUser({
-	username,
-	password,
-	email,
-}: { username?: string; password?: string; email?: string } = {}) {
-	const userData = createUser()
-	username ??= userData.username
-	password ??= userData.username
-	email ??= userData.email
-	const user = await prisma.user.create({
-		select: { id: true, name: true, username: true, email: true },
-		data: {
-			...userData,
-			email,
-			username,
-			roles: { connect: { name: 'user' } },
-			password: { create: { hash: await getPasswordHash(password) } },
-		},
-	})
-	insertedUsers.add(user.id)
-	return user as typeof user & { name: string }
-}
-
 let noteImages: Array<Awaited<ReturnType<typeof img>>> | undefined
 export async function getNoteImages() {
 	if (noteImages) return noteImages
@@ -94,7 +68,7 @@ export async function getNoteImages() {
 		}),
 		img({
 			altText:
-				'an office full of laptops and other office equipment that look like it was abandond in a rush out of the building in an emergency years ago.',
+				'an office full of laptops and other office equipment that look like it was abandoned in a rush out of the building in an emergency years ago.',
 			filepath: './tests/fixtures/images/notes/6.png',
 		}),
 		img({
@@ -139,4 +113,20 @@ export async function img({
 		contentType: filepath.endsWith('.png') ? 'image/png' : 'image/jpeg',
 		blob: await fs.promises.readFile(filepath),
 	}
+}
+
+export async function cleanupDb(prisma: PrismaClient) {
+	const tables = await prisma.$queryRaw<
+		{ name: string }[]
+	>`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_prisma_migrations';`
+
+	await prisma.$transaction([
+		// Disable FK constraints to avoid relation conflicts during deletion
+		prisma.$executeRawUnsafe(`PRAGMA foreign_keys = OFF`),
+		// Delete all rows from each table, preserving table structures
+		...tables.map(({ name }) =>
+			prisma.$executeRawUnsafe(`DELETE from "${name}"`),
+		),
+		prisma.$executeRawUnsafe(`PRAGMA foreign_keys = ON`),
+	])
 }

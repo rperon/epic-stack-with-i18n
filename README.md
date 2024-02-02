@@ -55,3 +55,7 @@ Update 22/09/2023 :
 - For meta translation, i'm doing the translation inside the loader and using
   that value in the MetaFunction. Example in the files : `forgot-passwords.tsx`,
   `login.tsx`...
+
+Update 2/01/2024
+
+- The remix-stack is update to the version of th 2/01/2024

@@ -1,12 +1,17 @@
-import { useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
-import { json, type DataFunctionArgs } from '@remix-run/node'
+import { getFormProps, useForm } from '@conform-to/react'
+import { parseWithZod } from '@conform-to/zod'
+import { invariantResponse } from '@epic-web/invariant'
+import {
+	json,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
+} from '@remix-run/node'
 import {
 	Form,
 	Link,
 	useActionData,
 	useLoaderData,
-	type V2_MetaFunction,
+	type MetaFunction,
 } from '@remix-run/react'
 import { formatDistanceToNow } from 'date-fns'
 import { z } from 'zod'
@@ -18,20 +23,13 @@ import { Icon } from '#app/components/ui/icon.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { requireUserId } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
-import {
-	getNoteImgSrc,
-	invariantResponse,
-	useIsPending,
-} from '#app/utils/misc.tsx'
-import {
-	requireUserWithPermission,
-	userHasPermission,
-} from '#app/utils/permissions.ts'
+import { getNoteImgSrc, useIsPending } from '#app/utils/misc.tsx'
+import { requireUserWithPermission } from '#app/utils/permissions.server.ts'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
-import { useOptionalUser } from '#app/utils/user.ts'
+import { userHasPermission, useOptionalUser } from '#app/utils/user.ts'
 import { type loader as notesLoader } from './notes.tsx'
 
-export async function loader({ params }: DataFunctionArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
 	const note = await prisma.note.findUnique({
 		where: { id: params.noteId },
 		select: {
@@ -65,17 +63,17 @@ const DeleteFormSchema = z.object({
 	noteId: z.string(),
 })
 
-export async function action({ request }: DataFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 	const userId = await requireUserId(request)
 	const formData = await request.formData()
-	const submission = parse(formData, {
+	const submission = parseWithZod(formData, {
 		schema: DeleteFormSchema,
 	})
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success') {
+		return json(
+			{ result: submission.reply() },
+			{ status: submission.status === 'error' ? 400 : 200 },
+		)
 	}
 
 	const { noteId } = submission.value
@@ -163,22 +161,18 @@ export function DeleteNote({ id }: { id: string }) {
 	const isPending = useIsPending()
 	const [form] = useForm({
 		id: 'delete-note',
-		lastSubmission: actionData?.submission,
-		constraint: getFieldsetConstraint(DeleteFormSchema),
-		onValidate({ formData }) {
-			return parse(formData, { schema: DeleteFormSchema })
-		},
+		lastResult: actionData?.result,
 	})
 
 	return (
-		<Form method="post" {...form.props}>
+		<Form method="POST" {...getFormProps(form)}>
 			<input type="hidden" name="noteId" value={id} />
 			<StatusButton
 				type="submit"
 				name="intent"
 				value="delete-note"
 				variant="destructive"
-				status={isPending ? 'pending' : actionData?.status ?? 'idle'}
+				status={isPending ? 'pending' : form.status ?? 'idle'}
 				disabled={isPending}
 				className="w-full max-md:aspect-square max-md:px-0"
 			>
@@ -191,7 +185,7 @@ export function DeleteNote({ id }: { id: string }) {
 	)
 }
 
-export const meta: V2_MetaFunction<
+export const meta: MetaFunction<
 	typeof loader,
 	{ 'routes/users+/$username_+/notes': typeof notesLoader }
 > = ({ data, params, matches }) => {

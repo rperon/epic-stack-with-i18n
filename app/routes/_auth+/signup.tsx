@@ -1,13 +1,14 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getFormProps, getInputProps, useForm } from '@conform-to/react'
+import { getZodConstraint, parseWithZod } from '@conform-to/zod'
 import * as E from '@react-email/components'
 import {
 	json,
 	redirect,
-	type DataFunctionArgs,
-	type V2_MetaFunction,
+	type ActionFunctionArgs,
+	type MetaFunction,
 } from '@remix-run/node'
 import { Form, useActionData, useSearchParams } from '@remix-run/react'
+import { HoneypotInputs } from 'remix-utils/honeypot/react'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { ErrorList, Field } from '#app/components/forms.tsx'
@@ -18,6 +19,7 @@ import {
 } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
 import { sendEmail } from '#app/utils/email.server.ts'
+import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { useIsPending } from '#app/utils/misc.tsx'
 import { EmailSchema } from '#app/utils/user-validation.ts'
 import { prepareVerification } from './verify.tsx'
@@ -26,9 +28,12 @@ const SignupSchema = z.object({
 	email: EmailSchema,
 })
 
-export async function action({ request }: DataFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 	const formData = await request.formData()
-	const submission = await parse(formData, {
+
+	checkHoneypot(formData)
+
+	const submission = await parseWithZod(formData, {
 		schema: SignupSchema.superRefine(async (data, ctx) => {
 			const existingUser = await prisma.user.findUnique({
 				where: { email: data.email },
@@ -45,11 +50,11 @@ export async function action({ request }: DataFunctionArgs) {
 		}),
 		async: true,
 	})
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success') {
+		return json(
+			{ result: submission.reply() },
+			{ status: submission.status === 'error' ? 400 : 200 },
+		)
 	}
 	const { email } = submission.value
 	const { verifyUrl, redirectTo, otp } = await prepareVerification({
@@ -68,8 +73,14 @@ export async function action({ request }: DataFunctionArgs) {
 	if (response.status === 'success') {
 		return redirect(redirectTo.toString())
 	} else {
-		submission.error[''] = [response.error.message]
-		return json({ status: 'error', submission } as const, { status: 500 })
+		return json(
+			{
+				result: submission.reply({ formErrors: [response.error.message] }),
+			},
+			{
+				status: 500,
+			},
+		)
 	}
 }
 
@@ -100,7 +111,7 @@ export function SignupEmail({
 	)
 }
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
 	return [{ title: 'Sign Up | Epic Notes' }]
 }
 
@@ -112,10 +123,10 @@ export default function SignupRoute() {
 
 	const [form, fields] = useForm({
 		id: 'signup-form',
-		constraint: getFieldsetConstraint(SignupSchema),
-		lastSubmission: actionData?.submission,
+		constraint: getZodConstraint(SignupSchema),
+		lastResult: actionData?.result,
 		onValidate({ formData }) {
-			const result = parse(formData, { schema: SignupSchema })
+			const result = parseWithZod(formData, { schema: SignupSchema })
 			return result
 		},
 		shouldRevalidate: 'onBlur',
@@ -129,36 +140,42 @@ export default function SignupRoute() {
 					Please enter your email.
 				</p>
 			</div>
-			<div className="mx-auto mt-16 min-w-[368px] max-w-sm">
-				<Form method="POST" {...form.props}>
+			<div className="mx-auto mt-16 min-w-full max-w-sm sm:min-w-[368px]">
+				<Form method="POST" {...getFormProps(form)}>
+					<HoneypotInputs />
 					<Field
 						labelProps={{
 							htmlFor: fields.email.id,
 							children: 'Email',
 						}}
-						inputProps={{ ...conform.input(fields.email), autoFocus: true }}
+						inputProps={{
+							...getInputProps(fields.email, { type: 'email' }),
+							autoFocus: true,
+							autoComplete: 'email',
+						}}
 						errors={fields.email.errors}
 					/>
 					<ErrorList errors={form.errors} id={form.errorId} />
 					<StatusButton
 						className="w-full"
-						status={isPending ? 'pending' : actionData?.status ?? 'idle'}
+						status={isPending ? 'pending' : form.status ?? 'idle'}
 						type="submit"
 						disabled={isPending}
 					>
 						Submit
 					</StatusButton>
 				</Form>
-				<div className="mt-5 flex flex-col gap-5 border-b-2 border-t-2 border-border py-3">
+				<ul className="mt-5 flex flex-col gap-5 border-b-2 border-t-2 border-border py-3">
 					{providerNames.map(providerName => (
-						<ProviderConnectionForm
-							key={providerName}
-							type="Signup"
-							providerName={providerName}
-							redirectTo={redirectTo}
-						/>
+						<li key={providerName}>
+							<ProviderConnectionForm
+								type="Signup"
+								providerName={providerName}
+								redirectTo={redirectTo}
+							/>
+						</li>
 					))}
-				</div>
+				</ul>
 			</div>
 		</div>
 	)

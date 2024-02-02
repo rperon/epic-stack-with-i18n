@@ -1,4 +1,11 @@
-import { json, redirect, type DataFunctionArgs } from '@remix-run/node'
+import { invariantResponse } from '@epic-web/invariant'
+import { type SEOHandle } from '@nasa-gcn/remix-seo'
+import {
+	json,
+	redirect,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
+} from '@remix-run/node'
 import {
 	Form,
 	Link,
@@ -7,6 +14,7 @@ import {
 	useSearchParams,
 	useSubmit,
 } from '@remix-run/react'
+import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { Field } from '#app/components/forms.tsx'
 import { Spacer } from '#app/components/spacer.tsx'
 import { Button } from '#app/components/ui/button.tsx'
@@ -21,14 +29,14 @@ import {
 	getAllInstances,
 	getInstanceInfo,
 } from '#app/utils/litefs.server.ts'
-import {
-	invariantResponse,
-	useDebounce,
-	useDoubleCheck,
-} from '#app/utils/misc.tsx'
-import { requireUserWithRole } from '#app/utils/permissions.ts'
+import { useDebounce, useDoubleCheck } from '#app/utils/misc.tsx'
+import { requireUserWithRole } from '#app/utils/permissions.server.ts'
 
-export async function loader({ request }: DataFunctionArgs) {
+export const handle: SEOHandle = {
+	getSitemapEntries: () => null,
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
 	await requireUserWithRole(request, 'admin')
 	const searchParams = new URL(request.url).searchParams
 	const query = searchParams.get('query')
@@ -53,7 +61,7 @@ export async function loader({ request }: DataFunctionArgs) {
 	return json({ cacheKeys, instance, instances, currentInstanceInfo })
 }
 
-export async function action({ request }: DataFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 	await requireUserWithRole(request, 'admin')
 	const formData = await request.formData()
 	const key = formData.get('cacheKey')
@@ -205,7 +213,7 @@ function CacheKeyRow({
 	const valuePage = `/admin/cache/${type}/${encodedKey}?instance=${instance}`
 	return (
 		<div className="flex items-center gap-2 font-mono">
-			<fetcher.Form method="post">
+			<fetcher.Form method="POST">
 				<input type="hidden" name="cacheKey" value={cacheKey} />
 				<input type="hidden" name="instance" value={instance} />
 				<input type="hidden" name="type" value={type} />
@@ -228,8 +236,14 @@ function CacheKeyRow({
 	)
 }
 
-export function ErrorBoundary({ error }: { error: Error }) {
-	console.error(error)
-
-	return <div>An unexpected error occurred: {error.message}</div>
+export function ErrorBoundary() {
+	return (
+		<GeneralErrorBoundary
+			statusHandlers={{
+				403: ({ error }) => (
+					<p>You are not allowed to do that: {error?.data.message}</p>
+				),
+			}}
+		/>
+	)
 }

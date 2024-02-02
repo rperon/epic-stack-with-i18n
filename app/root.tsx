@@ -1,12 +1,14 @@
-import { useForm } from '@conform-to/react'
-import { parse } from '@conform-to/zod'
+import { useForm, getFormProps } from '@conform-to/react'
+import { parseWithZod } from '@conform-to/zod'
+import { invariantResponse } from '@epic-web/invariant'
 import { cssBundleHref } from '@remix-run/css-bundle'
 import {
 	json,
-	type DataFunctionArgs,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
 	type HeadersFunction,
 	type LinksFunction,
-	type V2_MetaFunction,
+	type MetaFunction,
 } from '@remix-run/node'
 import {
 	Form,
@@ -25,40 +27,29 @@ import {
 } from '@remix-run/react'
 import { withSentry } from '@sentry/remix'
 import { useRef } from 'react'
-import { useTranslation } from 'react-i18next'
+import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import { z } from 'zod'
-import { Confetti } from './components/confetti.tsx'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
-import { ErrorList } from './components/forms.tsx'
+import { EpicProgress } from './components/progress-bar.tsx'
 import { SearchBar } from './components/search-bar.tsx'
-import { EpicToaster } from './components/toaster.tsx'
+import { useToast } from './components/toaster.tsx'
 import { Button } from './components/ui/button.tsx'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuPortal,
-	DropdownMenuRadioGroup,
-	DropdownMenuRadioItem,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from './components/ui/dropdown-menu.tsx'
 import { Icon, href as iconsHref } from './components/ui/icon.tsx'
-import fontStylestylesheetUrl from './styles/font.css'
-import tailwindStylesheetUrl from './styles/tailwind.css'
-import { authenticator, getUserId } from './utils/auth.server.ts'
+import { EpicToaster } from './components/ui/sonner.tsx'
+import tailwindStyleSheetUrl from './styles/tailwind.css'
+import { getUserId, logout } from './utils/auth.server.ts'
 import { ClientHintCheck, getHints, useHints } from './utils/client-hints.tsx'
-import { getConfetti } from './utils/confetti.server.ts'
 import { prisma } from './utils/db.server.ts'
 import { getEnv } from './utils/env.server.ts'
-import i18n from './utils/i18n.ts'
-import { i18next } from './utils/i18next.server.ts'
-import {
-	combineHeaders,
-	getDomainUrl,
-	getUserImgSrc,
-	invariantResponse,
-} from './utils/misc.tsx'
+import { honeypot } from './utils/honeypot.server.ts'
+import { combineHeaders, getDomainUrl, getUserImgSrc } from './utils/misc.tsx'
 import { useNonce } from './utils/nonce-provider.ts'
 import { useRequestInfo } from './utils/request-info.ts'
 import { type Theme, setTheme, getTheme } from './utils/theme.server.ts'
@@ -71,8 +62,7 @@ export const links: LinksFunction = () => {
 		// Preload svg sprite as a resource to avoid render blocking
 		{ rel: 'preload', href: iconsHref, as: 'image' },
 		// Preload CSS as a resource to avoid render blocking
-		{ rel: 'preload', href: fontStylestylesheetUrl, as: 'style' },
-		{ rel: 'preload', href: tailwindStylesheetUrl, as: 'style' },
+		{ rel: 'preload', href: tailwindStyleSheetUrl, as: 'style' },
 		cssBundleHref ? { rel: 'preload', href: cssBundleHref, as: 'style' } : null,
 		{ rel: 'mask-icon', href: '/favicons/mask-icon.svg' },
 		{
@@ -88,35 +78,25 @@ export const links: LinksFunction = () => {
 		} as const, // necessary to make typescript happy
 		//These should match the css preloads above to avoid css as render blocking resource
 		{ rel: 'icon', type: 'image/svg+xml', href: '/favicons/favicon.svg' },
-		{ rel: 'stylesheet', href: fontStylestylesheetUrl },
-		{ rel: 'stylesheet', href: tailwindStylesheetUrl },
+		{ rel: 'stylesheet', href: tailwindStyleSheetUrl },
 		cssBundleHref ? { rel: 'stylesheet', href: cssBundleHref } : null,
 	].filter(Boolean)
 }
 
-export const meta: V2_MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
 	return [
 		{ title: data ? 'Epic Notes' : 'Error | Epic Notes' },
 		{ name: 'description', content: `Your own captain's log` },
 	]
 }
 
-export const handle = {
-	// In the handle export, we can add a i18n key with namespaces our route
-	// will need to load. This key can be a single string or an array of strings.
-	// TIP: In most cases, you should set this to your defaultNS from your i18n config
-	// or if you did not set one, set it to the i18next default namespace "translation"
-	i18n: 'common',
-}
-
-export async function loader({ request }: DataFunctionArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 	const timings = makeTimings('root loader')
 	const userId = await time(() => getUserId(request), {
 		timings,
 		type: 'getUserId',
 		desc: 'getUserId in root',
 	})
-	const locale = await i18next.getLocale(request)
 
 	const user = userId
 		? await time(
@@ -139,16 +119,16 @@ export async function loader({ request }: DataFunctionArgs) {
 						where: { id: userId },
 					}),
 				{ timings, type: 'find user', desc: 'find user in root' },
-		  )
+			)
 		: null
 	if (userId && !user) {
 		console.info('something weird happened')
 		// something weird happened... The user is authenticated but we can't find
 		// them in the database. Maybe they were deleted? Let's log them out.
-		await authenticator.logout(request, { redirectTo: '/' })
+		await logout({ request, redirectTo: '/' })
 	}
 	const { toast, headers: toastHeaders } = await getToast(request)
-	const { confettiId, headers: confettiHeaders } = getConfetti(request)
+	const honeyProps = honeypot.getInputProps()
 
 	return json(
 		{
@@ -157,20 +137,18 @@ export async function loader({ request }: DataFunctionArgs) {
 				hints: getHints(request),
 				origin: getDomainUrl(request),
 				path: new URL(request.url).pathname,
-				locale,
 				userPrefs: {
 					theme: getTheme(request),
 				},
 			},
 			ENV: getEnv(),
 			toast,
-			confettiId,
+			honeyProps,
 		},
 		{
 			headers: combineHeaders(
 				{ 'Server-Timing': timings.toString() },
 				toastHeaders,
-				confettiHeaders,
 			),
 		},
 	)
@@ -187,45 +165,35 @@ const ThemeFormSchema = z.object({
 	theme: z.enum(['system', 'light', 'dark']),
 })
 
-export async function action({ request }: DataFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 	const formData = await request.formData()
-	invariantResponse(
-		formData.get('intent') === 'update-theme',
-		'Invalid intent',
-		{ status: 400 },
-	)
-	const submission = parse(formData, {
+	const submission = parseWithZod(formData, {
 		schema: ThemeFormSchema,
 	})
-	if (submission.intent !== 'submit') {
-		return json({ status: 'success', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
-	}
+
+	invariantResponse(submission.status === 'success', 'Invalid theme received')
+
 	const { theme } = submission.value
 
 	const responseInit = {
 		headers: { 'set-cookie': setTheme(theme) },
 	}
-	return json({ success: true, submission }, responseInit)
+	return json({ result: submission.reply() }, responseInit)
 }
 
 function Document({
 	children,
 	nonce,
 	theme = 'light',
-	locale = i18n.fallbackLng,
 	env = {},
 }: {
 	children: React.ReactNode
 	nonce: string
 	theme?: Theme
-	locale?: string
 	env?: Record<string, string>
 }) {
 	return (
-		<html lang={locale} className={`${theme} h-full overflow-x-hidden`}>
+		<html lang="en" className={`${theme} h-full overflow-x-hidden`}>
 			<head>
 				<ClientHintCheck nonce={nonce} />
 				<Meta />
@@ -256,39 +224,28 @@ function App() {
 	const theme = useTheme()
 	const matches = useMatches()
 	const isOnSearchPage = matches.find(m => m.id === 'routes/users+/index')
-	const { t } = useTranslation()
+	const searchBar = isOnSearchPage ? null : <SearchBar status="idle" />
+	useToast(data.toast)
 
 	return (
-		<Document
-			nonce={nonce}
-			theme={theme}
-			env={data.ENV}
-			locale={data.requestInfo.locale}
-		>
+		<Document nonce={nonce} theme={theme} env={data.ENV}>
 			<div className="flex h-screen flex-col justify-between">
 				<header className="container py-6">
-					<nav className="flex items-center justify-between">
-						<Link to="/">
-							<div className="font-light">epic</div>
-							<div className="font-bold">notes</div>
-						</Link>
-						{isOnSearchPage ? null : (
-							<div className="ml-auto max-w-sm flex-1 pr-10">
-								<SearchBar status="idle" />
-							</div>
-						)}
-						<div className="flex items-center gap-10">
-							<>
-								<LanguageDropDown />
-								{user ? (
-									<UserDropdown />
-								) : (
-									<Button asChild variant="default" size="sm">
-										<Link to="/login">{t('root.login')}</Link>
-									</Button>
-								)}
-							</>
+					<nav className="flex flex-wrap items-center justify-between gap-4 sm:flex-nowrap md:gap-8">
+						<Logo />
+						<div className="ml-auto hidden max-w-sm flex-1 sm:block">
+							{searchBar}
 						</div>
+						<div className="flex items-center gap-10">
+							{user ? (
+								<UserDropdown />
+							) : (
+								<Button asChild variant="default" size="lg">
+									<Link to="/login">Log In</Link>
+								</Button>
+							)}
+						</div>
+						<div className="block w-full sm:hidden">{searchBar}</div>
 					</nav>
 				</header>
 
@@ -297,25 +254,44 @@ function App() {
 				</div>
 
 				<div className="container flex justify-between pb-5">
-					<Link to="/">
-						<div className="font-light">epic</div>
-						<div className="font-bold">notes</div>
-					</Link>
+					<Logo />
 					<ThemeSwitch userPreference={data.requestInfo.userPrefs.theme} />
 				</div>
 			</div>
-			<Confetti id={data.confettiId} />
-			<EpicToaster toast={data.toast} />
+			<EpicToaster closeButton position="top-center" theme={theme} />
+			<EpicProgress />
 		</Document>
 	)
 }
-export default withSentry(App)
+
+function Logo() {
+	return (
+		<Link to="/" className="group grid leading-snug">
+			<span className="font-light transition group-hover:-translate-x-1">
+				epic
+			</span>
+			<span className="font-bold transition group-hover:translate-x-1">
+				notes
+			</span>
+		</Link>
+	)
+}
+
+function AppWithProviders() {
+	const data = useLoaderData<typeof loader>()
+	return (
+		<HoneypotProvider {...data.honeyProps}>
+			<App />
+		</HoneypotProvider>
+	)
+}
+
+export default withSentry(AppWithProviders)
 
 function UserDropdown() {
 	const user = useUser()
 	const submit = useSubmit()
 	const formRef = useRef<HTMLFormElement>(null)
-	const { t } = useTranslation()
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
@@ -342,14 +318,14 @@ function UserDropdown() {
 					<DropdownMenuItem asChild>
 						<Link prefetch="intent" to={`/users/${user.username}`}>
 							<Icon className="text-body-md" name="avatar">
-								{t('root.profile')}
+								Profile
 							</Icon>
 						</Link>
 					</DropdownMenuItem>
 					<DropdownMenuItem asChild>
 						<Link prefetch="intent" to={`/users/${user.username}/notes`}>
 							<Icon className="text-body-md" name="pencil-2">
-								{t('root.notes')}
+								Notes
 							</Icon>
 						</Link>
 					</DropdownMenuItem>
@@ -363,44 +339,12 @@ function UserDropdown() {
 					>
 						<Form action="/logout" method="POST" ref={formRef}>
 							<Icon className="text-body-md" name="exit">
-								<button type="submit">{t('root.logout')}</button>
+								<button type="submit">Logout</button>
 							</Icon>
 						</Form>
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenuPortal>
-		</DropdownMenu>
-	)
-}
-
-function LanguageDropDown() {
-	const { t, i18n } = useTranslation()
-	const submit = useSubmit()
-
-	const onValueChange = (lang: string) => {
-		i18n.changeLanguage(lang)
-		submit(null, { method: 'POST', action: `/change-language/${lang}` })
-	}
-
-	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button variant="secondary"> {t('root.language')} </Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent>
-				<DropdownMenuSeparator />
-				<DropdownMenuRadioGroup
-					value={i18n.language}
-					onValueChange={onValueChange}
-				>
-					<DropdownMenuRadioItem value="fr">
-						{t('root.french')}
-					</DropdownMenuRadioItem>
-					<DropdownMenuRadioItem value="en">
-						{t('root.english')}
-					</DropdownMenuRadioItem>
-				</DropdownMenuRadioGroup>
-			</DropdownMenuContent>
 		</DropdownMenu>
 	)
 }
@@ -425,16 +369,16 @@ export function useTheme() {
  */
 export function useOptimisticThemeMode() {
 	const fetchers = useFetchers()
-
-	const themeFetcher = fetchers.find(
-		f => f.formData?.get('intent') === 'update-theme',
-	)
+	const themeFetcher = fetchers.find(f => f.formAction === '/')
 
 	if (themeFetcher && themeFetcher.formData) {
-		const submission = parse(themeFetcher.formData, {
+		const submission = parseWithZod(themeFetcher.formData, {
 			schema: ThemeFormSchema,
 		})
-		return submission.value?.theme
+
+		if (submission.status === 'success') {
+			return submission.value.theme
+		}
 	}
 }
 
@@ -443,10 +387,7 @@ function ThemeSwitch({ userPreference }: { userPreference?: Theme | null }) {
 
 	const [form] = useForm({
 		id: 'theme-switch',
-		lastSubmission: fetcher.data?.submission,
-		onValidate({ formData }) {
-			return parse(formData, { schema: ThemeFormSchema })
-		},
+		lastResult: fetcher.data?.result,
 	})
 
 	const optimisticMode = useOptimisticThemeMode()
@@ -472,19 +413,16 @@ function ThemeSwitch({ userPreference }: { userPreference?: Theme | null }) {
 	}
 
 	return (
-		<fetcher.Form method="POST" {...form.props}>
+		<fetcher.Form method="POST" {...getFormProps(form)}>
 			<input type="hidden" name="theme" value={nextMode} />
 			<div className="flex gap-2">
 				<button
-					name="intent"
-					value="update-theme"
 					type="submit"
 					className="flex h-8 w-8 cursor-pointer items-center justify-center"
 				>
 					{modeLabel[mode]}
 				</button>
 			</div>
-			<ErrorList errors={form.errors} id={form.errorId} />
 		</fetcher.Form>
 	)
 }

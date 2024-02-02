@@ -1,13 +1,16 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { useForm, getFormProps, getInputProps } from '@conform-to/react'
+import { getZodConstraint, parseWithZod } from '@conform-to/zod'
+import { invariant } from '@epic-web/invariant'
 import {
 	json,
 	redirect,
-	type DataFunctionArgs,
-	type V2_MetaFunction,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
+	type MetaFunction,
 } from '@remix-run/node'
 import { Form, Link, useActionData, useSearchParams } from '@remix-run/react'
-import { safeRedirect } from 'remix-utils'
+import { HoneypotInputs } from 'remix-utils/honeypot/react'
+import { safeRedirect } from 'remix-utils/safe-redirect'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { CheckboxField, ErrorList, Field } from '#app/components/forms.tsx'
@@ -25,13 +28,9 @@ import {
 	providerNames,
 } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
-import { i18next } from '#app/utils/i18next.server.ts'
-import {
-	combineResponseInits,
-	invariant,
-	useIsPending,
-} from '#app/utils/misc.tsx'
-import { sessionStorage } from '#app/utils/session.server.ts'
+import { checkHoneypot } from '#app/utils/honeypot.server.ts'
+import { combineResponseInits, useIsPending } from '#app/utils/misc.tsx'
+import { authSessionStorage } from '#app/utils/session.server.ts'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
 import { PasswordSchema, UsernameSchema } from '#app/utils/user-validation.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
@@ -39,6 +38,7 @@ import { getRedirectToUrl, type VerifyFunctionArgs } from './verify.tsx'
 
 const verifiedTimeKey = 'verified-time'
 const unverifiedSessionIdKey = 'unverified-session-id'
+const rememberKey = 'remember'
 
 export async function handleNewSession(
 	{
@@ -63,20 +63,15 @@ export async function handleNewSession(
 	const userHasTwoFactor = Boolean(verification)
 
 	if (userHasTwoFactor) {
-		const verifySession = await verifySessionStorage.getSession(
-			request.headers.get('cookie'),
-		)
+		const verifySession = await verifySessionStorage.getSession()
 		verifySession.set(unverifiedSessionIdKey, session.id)
+		verifySession.set(rememberKey, remember)
 		const redirectUrl = getRedirectToUrl({
 			request,
 			type: twoFAVerificationType,
 			target: session.userId,
 			redirectTo,
 		})
-		if (remember) {
-			redirectUrl.searchParams.set('remember', 'on')
-		}
-		redirectUrl.searchParams.sort()
 		return redirect(
 			`${redirectUrl.pathname}?${redirectUrl.searchParams}`,
 			combineResponseInits(
@@ -90,17 +85,17 @@ export async function handleNewSession(
 			),
 		)
 	} else {
-		const cookieSession = await sessionStorage.getSession(
+		const authSession = await authSessionStorage.getSession(
 			request.headers.get('cookie'),
 		)
-		cookieSession.set(sessionKey, session.id)
+		authSession.set(sessionKey, session.id)
 
 		return redirect(
 			safeRedirect(redirectTo),
 			combineResponseInits(
 				{
 					headers: {
-						'set-cookie': await sessionStorage.commitSession(cookieSession, {
+						'set-cookie': await authSessionStorage.commitSession(authSession, {
 							expires: remember ? session.expirationDate : undefined,
 						}),
 					},
@@ -115,37 +110,50 @@ export async function handleVerification({
 	request,
 	submission,
 }: VerifyFunctionArgs) {
-	invariant(submission.value, 'Submission should have a value by this point')
-	const cookieSession = await sessionStorage.getSession(
+	invariant(
+		submission.status === 'success',
+		'Submission should be successful by now',
+	)
+	const authSession = await authSessionStorage.getSession(
 		request.headers.get('cookie'),
 	)
 	const verifySession = await verifySessionStorage.getSession(
 		request.headers.get('cookie'),
 	)
 
-	const session = await prisma.session.findUnique({
-		select: { expirationDate: true },
-		where: { id: verifySession.get(unverifiedSessionIdKey) },
-	})
-	if (!session) {
-		throw await redirectWithToast('/login', {
-			type: 'error',
-			title: 'Invalid session',
-			description: 'Could not find session to verify. Please try again.',
+	const remember = verifySession.get(rememberKey)
+	const { redirectTo } = submission.value
+	const headers = new Headers()
+	authSession.set(verifiedTimeKey, Date.now())
+
+	const unverifiedSessionId = verifySession.get(unverifiedSessionIdKey)
+	if (unverifiedSessionId) {
+		const session = await prisma.session.findUnique({
+			select: { expirationDate: true },
+			where: { id: unverifiedSessionId },
 		})
+		if (!session) {
+			throw await redirectWithToast('/login', {
+				type: 'error',
+				title: 'Invalid session',
+				description: 'Could not find session to verify. Please try again.',
+			})
+		}
+		authSession.set(sessionKey, unverifiedSessionId)
+
+		headers.append(
+			'set-cookie',
+			await authSessionStorage.commitSession(authSession, {
+				expires: remember ? session.expirationDate : undefined,
+			}),
+		)
+	} else {
+		headers.append(
+			'set-cookie',
+			await authSessionStorage.commitSession(authSession),
+		)
 	}
 
-	cookieSession.set(sessionKey, verifySession.get(unverifiedSessionIdKey))
-	const { redirectTo } = submission.value
-	cookieSession.set(verifiedTimeKey, Date.now())
-
-	const headers = new Headers()
-	headers.append(
-		'set-cookie',
-		await sessionStorage.commitSession(cookieSession, {
-			expires: submission.value.remember ? session.expirationDate : undefined,
-		}),
-	)
 	headers.append(
 		'set-cookie',
 		await verifySessionStorage.destroySession(verifySession),
@@ -155,7 +163,7 @@ export async function handleVerification({
 }
 
 export async function shouldRequestTwoFA(request: Request) {
-	const cookieSession = await sessionStorage.getSession(
+	const authSession = await authSessionStorage.getSession(
 		request.headers.get('cookie'),
 	)
 	const verifySession = await verifySessionStorage.getSession(
@@ -170,8 +178,8 @@ export async function shouldRequestTwoFA(request: Request) {
 		where: { target_type: { target: userId, type: twoFAVerificationType } },
 	})
 	if (!userHasTwoFA) return false
-	const verifiedTime = cookieSession.get(verifiedTimeKey) ?? new Date(0)
-	const twoHours = 1000 * 60 * 60 * 2
+	const verifiedTime = authSession.get(verifiedTimeKey) ?? new Date(0)
+	const twoHours = 1000 * 60 * 2
 	return Date.now() - verifiedTime > twoHours
 }
 
@@ -182,26 +190,25 @@ const LoginFormSchema = z.object({
 	remember: z.boolean().optional(),
 })
 
-export async function loader({ request }: DataFunctionArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 	await requireAnonymous(request)
-	const t = await i18next.getFixedT(request)
-	return json({ meta: { title: t('meta.login.title') } })
+	return json({})
 }
 
-export async function action({ request }: DataFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 	await requireAnonymous(request)
-	const t = await i18next.getFixedT(request)
 	const formData = await request.formData()
-	const submission = await parse(formData, {
+	checkHoneypot(formData)
+	const submission = await parseWithZod(formData, {
 		schema: intent =>
 			LoginFormSchema.transform(async (data, ctx) => {
-				if (intent !== 'submit') return { ...data, session: null }
+				if (intent !== null) return { ...data, session: null }
 
 				const session = await login(data)
 				if (!session) {
 					ctx.addIssue({
-						code: 'custom',
-						message: t('auth.invalidUsernameOrPassword'),
+						code: z.ZodIssueCode.custom,
+						message: 'Invalid username or password',
 					})
 					return z.NEVER
 				}
@@ -210,16 +217,12 @@ export async function action({ request }: DataFunctionArgs) {
 			}),
 		async: true,
 	})
-	// get the password off the payload that's sent back
-	delete submission.payload.password
 
-	if (submission.intent !== 'submit') {
-		// @ts-expect-error - conform should probably have support for doing this
-		delete submission.value?.password
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value?.session) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value.session) {
+		return json(
+			{ result: submission.reply({ hideFields: ['password'] }) },
+			{ status: submission.status === 'error' ? 400 : 200 },
+		)
 	}
 
 	const { session, remember, redirectTo } = submission.value
@@ -240,11 +243,11 @@ export default function LoginPage() {
 
 	const [form, fields] = useForm({
 		id: 'login-form',
-		constraint: getFieldsetConstraint(LoginFormSchema),
+		constraint: getZodConstraint(LoginFormSchema),
 		defaultValue: { redirectTo },
-		lastSubmission: actionData?.submission,
+		lastResult: actionData?.result,
 		onValidate({ formData }) {
-			return parse(formData, { schema: LoginFormSchema })
+			return parseWithZod(formData, { schema: LoginFormSchema })
 		},
 		shouldRevalidate: 'onBlur',
 	})
@@ -262,22 +265,27 @@ export default function LoginPage() {
 
 				<div>
 					<div className="mx-auto w-full max-w-md px-8">
-						<Form method="POST" {...form.props}>
+						<Form method="POST" {...getFormProps(form)}>
+							<HoneypotInputs />
 							<Field
 								labelProps={{ children: 'Username' }}
 								inputProps={{
-									...conform.input(fields.username),
+									...getInputProps(fields.username, { type: 'text' }),
 									autoFocus: true,
 									className: 'lowercase',
+									autoComplete: 'username',
 								}}
 								errors={fields.username.errors}
 							/>
 
 							<Field
 								labelProps={{ children: 'Password' }}
-								inputProps={conform.input(fields.password, {
-									type: 'password',
-								})}
+								inputProps={{
+									...getInputProps(fields.password, {
+										type: 'password',
+									}),
+									autoComplete: 'current-password',
+								}}
 								errors={fields.password.errors}
 							/>
 
@@ -287,7 +295,7 @@ export default function LoginPage() {
 										htmlFor: fields.remember.id,
 										children: 'Remember me',
 									}}
-									buttonProps={conform.input(fields.remember, {
+									buttonProps={getInputProps(fields.remember, {
 										type: 'checkbox',
 									})}
 									errors={fields.remember.errors}
@@ -303,14 +311,14 @@ export default function LoginPage() {
 							</div>
 
 							<input
-								{...conform.input(fields.redirectTo, { type: 'hidden' })}
+								{...getInputProps(fields.redirectTo, { type: 'hidden' })}
 							/>
 							<ErrorList errors={form.errors} id={form.errorId} />
 
 							<div className="flex items-center justify-between gap-6 pt-3">
 								<StatusButton
 									className="w-full"
-									status={isPending ? 'pending' : actionData?.status ?? 'idle'}
+									status={isPending ? 'pending' : form.status ?? 'idle'}
 									type="submit"
 									disabled={isPending}
 								>
@@ -318,16 +326,17 @@ export default function LoginPage() {
 								</StatusButton>
 							</div>
 						</Form>
-						<div className="mt-5 flex flex-col gap-5 border-b-2 border-t-2 border-border py-3">
+						<ul className="mt-5 flex flex-col gap-5 border-b-2 border-t-2 border-border py-3">
 							{providerNames.map(providerName => (
-								<ProviderConnectionForm
-									key={providerName}
-									type="Login"
-									providerName={providerName}
-									redirectTo={redirectTo}
-								/>
+								<li key={providerName}>
+									<ProviderConnectionForm
+										type="Login"
+										providerName={providerName}
+										redirectTo={redirectTo}
+									/>
+								</li>
 							))}
-						</div>
+						</ul>
 						<div className="flex items-center justify-center gap-2 pt-6">
 							<span className="text-muted-foreground">New here?</span>
 							<Link
@@ -347,8 +356,8 @@ export default function LoginPage() {
 	)
 }
 
-export const meta: V2_MetaFunction<typeof loader> = ({ data }) => {
-	return [{ title: data?.meta.title }]
+export const meta: MetaFunction = () => {
+	return [{ title: 'Login to Epic Notes' }]
 }
 
 export function ErrorBoundary() {

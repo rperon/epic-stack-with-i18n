@@ -1,10 +1,9 @@
-import { redirect, type DataFunctionArgs } from '@remix-run/node'
+import { redirect, type LoaderFunctionArgs } from '@remix-run/node'
 import {
 	authenticator,
 	getSessionExpirationDate,
 	getUserId,
 } from '#app/utils/auth.server.ts'
-import { handleMockCallback } from '#app/utils/connections.server.ts'
 import { ProviderNameSchema, providerLabels } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
 import { combineHeaders } from '#app/utils/misc.tsx'
@@ -26,9 +25,8 @@ import {
 
 const destroyRedirectTo = { 'set-cookie': destroyRedirectToHeader }
 
-export async function loader({ request, params }: DataFunctionArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
 	const providerName = ProviderNameSchema.parse(params.provider)
-	request = await handleMockCallback(providerName, request)
 	const redirectTo = getRedirectCookieValue(request)
 	const label = providerLabels[providerName]
 
@@ -56,7 +54,9 @@ export async function loader({ request, params }: DataFunctionArgs) {
 
 	const existingConnection = await prisma.connection.findUnique({
 		select: { userId: true },
-		where: { providerId: profile.id },
+		where: {
+			providerName_providerId: { providerName, providerId: profile.id },
+		},
 	})
 
 	const userId = await getUserId(request)
@@ -134,9 +134,7 @@ export async function loader({ request, params }: DataFunctionArgs) {
 	}
 
 	// this is a new user, so let's get them onboarded
-	const verifySession = await verifySessionStorage.getSession(
-		request.headers.get('cookie'),
-	)
+	const verifySession = await verifySessionStorage.getSession()
 	verifySession.set(onboardingEmailSessionKey, profile.email)
 	verifySession.set(prefilledProfileKey, {
 		...profile,

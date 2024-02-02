@@ -1,20 +1,11 @@
 import { z } from 'zod'
 
-/**
- * User validation runtime translation keys
- * https://github.com/i18next/i18next-parser#caveats
- *
- * t('form.user.required')
- * t('form.user.tooShort')
- * t('form.user.tooLong')
- * t('form.user.invalidCharacters')
- */
 export const UsernameSchema = z
-	.string({ required_error: 'form.user.required' })
-	.min(3, { message: 'form.user.tooShort' })
-	.max(20, { message: 'form.user.tooLong' })
+	.string({ required_error: 'Username is required' })
+	.min(3, { message: 'Username is too short' })
+	.max(20, { message: 'Username is too long' })
 	.regex(/^[a-zA-Z0-9_]+$/, {
-		message: 'form.user.invalidCharacters',
+		message: 'Username can only include letters, numbers, and underscores',
 	})
 	// users can type the username in any case, but we store it in lowercase
 	.transform(value => value.toLowerCase())
@@ -34,3 +25,15 @@ export const EmailSchema = z
 	.max(100, { message: 'Email is too long' })
 	// users can type the email in any case, but we store it in lowercase
 	.transform(value => value.toLowerCase())
+
+export const PasswordAndConfirmPasswordSchema = z
+	.object({ password: PasswordSchema, confirmPassword: PasswordSchema })
+	.superRefine(({ confirmPassword, password }, ctx) => {
+		if (confirmPassword !== password) {
+			ctx.addIssue({
+				path: ['confirmPassword'],
+				code: 'custom',
+				message: 'The passwords must match',
+			})
+		}
+	})
