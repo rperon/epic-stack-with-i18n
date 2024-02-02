@@ -10,6 +10,7 @@ export default {
 	serverPlatform: 'node',
 	tailwind: true,
 	postcss: true,
+	serverDependenciesToBundle: ['remix-i18next'],
 	watchPaths: ['./tailwind.config.ts'],
 	routes: async defineRoutes => {
 		return flatRoutes('routes', defineRoutes, {

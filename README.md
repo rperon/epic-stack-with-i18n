@@ -58,4 +58,6 @@ Update 22/09/2023 :
 
 Update 2/01/2024
 
-- The remix-stack is update to the version of th 2/01/2024
+- The remix-stack is updated to the version of th 2/01/2024
+
+- Add of `i18next.d.ts` for namespace types

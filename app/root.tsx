@@ -27,6 +27,8 @@ import {
 } from '@remix-run/react'
 import { withSentry } from '@sentry/remix'
 import { useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+// import { useChangeLanguage } from 'remix-i18next'
 import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
@@ -39,6 +41,9 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuPortal,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from './components/ui/dropdown-menu.tsx'
 import { Icon, href as iconsHref } from './components/ui/icon.tsx'
@@ -49,6 +54,8 @@ import { ClientHintCheck, getHints, useHints } from './utils/client-hints.tsx'
 import { prisma } from './utils/db.server.ts'
 import { getEnv } from './utils/env.server.ts'
 import { honeypot } from './utils/honeypot.server.ts'
+import { i18n, useChangeLanguage } from './utils/i18n.ts'
+import { i18next } from './utils/i18next.server.ts'
 import { combineHeaders, getDomainUrl, getUserImgSrc } from './utils/misc.tsx'
 import { useNonce } from './utils/nonce-provider.ts'
 import { useRequestInfo } from './utils/request-info.ts'
@@ -97,6 +104,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 		type: 'getUserId',
 		desc: 'getUserId in root',
 	})
+	const locale = await i18next.getLocale(request)
 
 	const user = userId
 		? await time(
@@ -137,6 +145,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 				hints: getHints(request),
 				origin: getDomainUrl(request),
 				path: new URL(request.url).pathname,
+				locale,
 				userPrefs: {
 					theme: getTheme(request),
 				},
@@ -152,6 +161,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 			),
 		},
 	)
+}
+
+export const handle = {
+	// In the handle export, we can add a i18n key with namespaces our route
+	// will need to load. This key can be a single string or an array of strings.
+	// TIP: In most cases, you should set this to your defaultNS from your i18n config
+	// or if you did not set one, set it to the i18next default namespace "translation"
+	i18n: 'common',
 }
 
 export const headers: HeadersFunction = ({ loaderHeaders }) => {
@@ -185,15 +202,17 @@ function Document({
 	children,
 	nonce,
 	theme = 'light',
+	locale = i18n.fallbackLng,
 	env = {},
 }: {
 	children: React.ReactNode
 	nonce: string
 	theme?: Theme
+	locale?: string
 	env?: Record<string, string>
 }) {
 	return (
-		<html lang="en" className={`${theme} h-full overflow-x-hidden`}>
+		<html lang={locale} className={`${theme} h-full overflow-x-hidden`}>
 			<head>
 				<ClientHintCheck nonce={nonce} />
 				<Meta />
@@ -223,12 +242,20 @@ function App() {
 	const user = useOptionalUser()
 	const theme = useTheme()
 	const matches = useMatches()
+	const { t } = useTranslation()
 	const isOnSearchPage = matches.find(m => m.id === 'routes/users+/index')
 	const searchBar = isOnSearchPage ? null : <SearchBar status="idle" />
+	const { locale } = data.requestInfo
 	useToast(data.toast)
+	useChangeLanguage(locale)
 
 	return (
-		<Document nonce={nonce} theme={theme} env={data.ENV}>
+		<Document
+			locale={data.requestInfo.locale}
+			nonce={nonce}
+			theme={theme}
+			env={data.ENV}
+		>
 			<div className="flex h-screen flex-col justify-between">
 				<header className="container py-6">
 					<nav className="flex flex-wrap items-center justify-between gap-4 sm:flex-nowrap md:gap-8">
@@ -237,11 +264,12 @@ function App() {
 							{searchBar}
 						</div>
 						<div className="flex items-center gap-10">
+							<LanguageDropDown />
 							{user ? (
 								<UserDropdown />
 							) : (
 								<Button asChild variant="default" size="lg">
-									<Link to="/login">Log In</Link>
+									<Link to="/login">{t('root.login')}</Link>
 								</Button>
 							)}
 						</div>
@@ -290,6 +318,7 @@ export default withSentry(AppWithProviders)
 
 function UserDropdown() {
 	const user = useUser()
+	const { t } = useTranslation()
 	const submit = useSubmit()
 	const formRef = useRef<HTMLFormElement>(null)
 	return (
@@ -318,14 +347,14 @@ function UserDropdown() {
 					<DropdownMenuItem asChild>
 						<Link prefetch="intent" to={`/users/${user.username}`}>
 							<Icon className="text-body-md" name="avatar">
-								Profile
+								{t('root.profile')}
 							</Icon>
 						</Link>
 					</DropdownMenuItem>
 					<DropdownMenuItem asChild>
 						<Link prefetch="intent" to={`/users/${user.username}/notes`}>
 							<Icon className="text-body-md" name="pencil-2">
-								Notes
+								{t('root.notes')}
 							</Icon>
 						</Link>
 					</DropdownMenuItem>
@@ -427,9 +456,45 @@ function ThemeSwitch({ userPreference }: { userPreference?: Theme | null }) {
 	)
 }
 
+function LanguageDropDown() {
+	const { t, i18n } = useTranslation()
+	const submit = useSubmit()
+
+	const onValueChange = (lang: string) => {
+		i18n.changeLanguage(lang)
+		submit(null, {
+			method: 'POST',
+			action: `/settings/change-language/${lang}`,
+		})
+	}
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="secondary"> {t('root.language')} </Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent>
+				<DropdownMenuSeparator />
+				<DropdownMenuRadioGroup
+					value={i18n.language}
+					onValueChange={onValueChange}
+				>
+					<DropdownMenuRadioItem value="fr">
+						{t('root.french')}
+					</DropdownMenuRadioItem>
+					<DropdownMenuRadioItem value="en">
+						{t('root.english')}
+					</DropdownMenuRadioItem>
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	)
+}
+
 export function ErrorBoundary() {
 	// the nonce doesn't rely on the loader so we can access that
 	const nonce = useNonce()
+	// const locale = useLocale()
 
 	// NOTE: you cannot use useLoaderData in an ErrorBoundary because the loader
 	// likely failed to run so we have to do the best we can.
