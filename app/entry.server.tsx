@@ -1,3 +1,4 @@
+import { resolve } from 'path'
 import { PassThrough } from 'stream'
 import {
 	createReadableStreamFromReadable,
@@ -7,10 +8,15 @@ import {
 } from '@remix-run/node'
 import { RemixServer } from '@remix-run/react'
 import * as Sentry from '@sentry/remix'
+import { createInstance } from 'i18next'
+import FSBackend from 'i18next-fs-backend'
 import { isbot } from 'isbot'
 import { getInstanceInfo } from 'litefs-js'
 import { renderToPipeableStream } from 'react-dom/server'
+import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { getEnv, init } from './utils/env.server.ts'
+import { i18n } from './utils/i18n.ts'
+import { i18next } from './utils/i18next.server.ts'
 import { NonceProvider } from './utils/nonce-provider.ts'
 import { makeTimings } from './utils/timing.server.ts'
 
@@ -43,6 +49,26 @@ export default async function handleRequest(...args: DocRequestArgs) {
 		? 'onAllReady'
 		: 'onShellReady'
 
+	// First, we create a new instance of i18next so every request will have a
+	// completely unique instance and not share any state
+	const i18nInstance = createInstance()
+	// Then we could detect locale from the request
+	let lng = await i18next.getLocale(request)
+	// And here we detect what namespaces the routes about to render want to use
+	let ns = i18next.getRouteNamespaces(remixContext)
+
+	await i18nInstance
+		.use(initReactI18next)
+		.use(FSBackend)
+		.init({
+			...i18n,
+			lng,
+			ns,
+			backend: {
+				loadPath: resolve('./public/locales/{{lng}}/{{ns}}.json'),
+			},
+		})
+
 	const nonce = String(loadContext.cspNonce) ?? undefined
 	return new Promise(async (resolve, reject) => {
 		let didError = false
@@ -52,7 +78,9 @@ export default async function handleRequest(...args: DocRequestArgs) {
 
 		const { pipe, abort } = renderToPipeableStream(
 			<NonceProvider value={nonce}>
-				<RemixServer context={remixContext} url={request.url} />
+				<I18nextProvider i18n={i18nInstance}>
+					<RemixServer context={remixContext} url={request.url} />
+				</I18nextProvider>
 			</NonceProvider>,
 			{
 				[callbackName]: () => {

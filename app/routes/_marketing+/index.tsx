@@ -7,6 +7,7 @@ import {
 } from '#app/components/ui/tooltip.tsx'
 import { cn } from '#app/utils/misc.tsx'
 import { logos } from './logos/logos.ts'
+import { useTranslation } from 'react-i18next'
 
 export const meta: MetaFunction = () => [{ title: 'Epic Notes' }]
 
@@ -28,6 +29,7 @@ const rowClasses: Record<(typeof logos)[number]['row'], string> = {
 }
 
 export default function Index() {
+	const { t } = useTranslation()
 	return (
 		<main className="font-poppins grid h-full place-items-center">
 			<div className="grid place-items-center px-4 py-16 xl:grid-cols-2 xl:gap-24">
@@ -58,14 +60,14 @@ export default function Index() {
 						data-paragraph
 						className="mt-6 animate-slide-top text-xl/7 text-muted-foreground [animation-fill-mode:backwards] [animation-delay:0.8s] xl:mt-8 xl:animate-slide-left xl:text-xl/6 xl:leading-10 xl:[animation-fill-mode:backwards] xl:[animation-delay:1s]"
 					>
-						Check the{' '}
+						{t('marketing.title.start')}{' '}
 						<a
 							className="underline hover:no-underline"
 							href="https://github.com/epicweb-dev/epic-stack/blob/main/docs/getting-started.md"
 						>
-							Getting Started guide
+							{t('marketing.title.middle')}
 						</a>{' '}
-						file for how to get your project off the ground!
+						{t('marketing.title.end')}
 					</p>
 				</div>
 				<ul className="mt-16 flex max-w-3xl flex-wrap justify-center gap-2 sm:gap-4 xl:mt-0 xl:grid xl:grid-flow-col xl:grid-cols-5 xl:grid-rows-6">

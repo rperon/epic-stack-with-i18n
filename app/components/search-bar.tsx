@@ -1,5 +1,6 @@
 import { Form, useSearchParams, useSubmit } from '@remix-run/react'
 import { useId } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useDebounce, useIsPending } from '#app/utils/misc.tsx'
 import { Icon } from './ui/icon.tsx'
 import { Input } from './ui/input.tsx'
@@ -18,6 +19,7 @@ export function SearchBar({
 	const id = useId()
 	const [searchParams] = useSearchParams()
 	const submit = useSubmit()
+	const { t } = useTranslation()
 	const isSubmitting = useIsPending({
 		formMethod: 'GET',
 		formAction: '/users',
@@ -36,14 +38,14 @@ export function SearchBar({
 		>
 			<div className="flex-1">
 				<Label htmlFor={id} className="sr-only">
-					Search
+					{t('search')}
 				</Label>
 				<Input
 					type="search"
 					name="search"
 					id={id}
 					defaultValue={searchParams.get('search') ?? ''}
-					placeholder="Search"
+					placeholder={t('search')}
 					className="w-full"
 					autoFocus={autoFocus}
 				/>
@@ -55,7 +57,7 @@ export function SearchBar({
 					className="flex w-full items-center justify-center"
 				>
 					<Icon name="magnifying-glass" size="md" />
-					<span className="sr-only">Search</span>
+					<span className="sr-only">{t('search')}</span>
 				</StatusButton>
 			</div>
 		</Form>
