@@ -61,3 +61,9 @@ Update 2/01/2024
 - The remix-stack is updated to the version of th 2/01/2024
 
 - Add of `i18next.d.ts` for namespace types
+
+Update 16/02/2024
+
+- In `entry.client.tsx`, for development environement i added a custom header so
+  that the translations are not cached into the browser. cf
+  [#5](https://github.com/rperon/epic-stack-with-i18n/issues/5)
