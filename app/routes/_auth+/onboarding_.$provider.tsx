@@ -5,7 +5,6 @@ import {
 	useForm,
 } from '@conform-to/react'
 import { getZodConstraint, parseWithZod } from '@conform-to/zod'
-import { invariant } from '@epic-web/invariant'
 import {
 	json,
 	redirect,
@@ -27,9 +26,9 @@ import { Spacer } from '#app/components/spacer.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import {
 	authenticator,
-	requireAnonymous,
 	sessionKey,
 	signupWithConnection,
+	requireAnonymous,
 } from '#app/utils/auth.server.ts'
 import { ProviderNameSchema } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
@@ -38,9 +37,8 @@ import { authSessionStorage } from '#app/utils/session.server.ts'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
 import { NameSchema, UsernameSchema } from '#app/utils/user-validation.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
-import { type VerifyFunctionArgs } from './verify.tsx'
+import { onboardingEmailSessionKey } from './onboarding'
 
-export const onboardingEmailSessionKey = 'onboardingEmail'
 export const providerIdKey = 'providerId'
 export const prefilledProfileKey = 'prefilledProfile'
 
@@ -174,20 +172,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		{ title: 'Welcome', description: 'Thanks for signing up!' },
 		{ headers },
 	)
-}
-
-export async function handleVerification({ submission }: VerifyFunctionArgs) {
-	invariant(
-		submission.status === 'success',
-		'Submission should be successful by now',
-	)
-	const verifySession = await verifySessionStorage.getSession()
-	verifySession.set(onboardingEmailSessionKey, submission.value.target)
-	return redirect('/onboarding', {
-		headers: {
-			'set-cookie': await verifySessionStorage.commitSession(verifySession),
-		},
-	})
 }
 
 export const meta: MetaFunction = () => {
