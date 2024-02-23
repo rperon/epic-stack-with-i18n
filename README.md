@@ -58,7 +58,7 @@ Update 22/09/2023 :
 
 Update 2/01/2024
 
-- The remix-stack is updated to the version of th 2/01/2024
+- The remix-stack is updated to the version of the 2/01/2024
 
 - Add of `i18next.d.ts` for namespace types
 
@@ -67,3 +67,15 @@ Update 16/02/2024
 - In `entry.client.tsx`, for development environement i added a custom header so
   that the translations are not cached into the browser. cf
   [#5](https://github.com/rperon/epic-stack-with-i18n/issues/5)
+
+Update 23/02/2024
+
+- Epic stack is updated to the 22/02/2024 version with support for vite.
+- The only modification necessary for making i18n-remix work with remix is to
+  add this in the `vite.config.ts` file :
+
+```ts
+	ssr: {
+		noExternal: ['remix-i18next'],
+	},
+```
