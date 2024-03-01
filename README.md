@@ -79,3 +79,16 @@ Update 23/02/2024
 		noExternal: ['remix-i18next'],
 	},
 ```
+
+Update 1/03/2024
+
+- Following Remix vite 18next example by Sergio Xalambri
+  https://github.com/sergiodxa/remix-vite-i18next/tree/main, i refactored the
+  example.
+- Updated to latest version of `remix-i18next`, we no longer need to modify the
+  `vite.config.ts` file.
+- Exit `i18next-fs-backend` adn `i18next-http-backend`, we are now transforming
+  the json files to ts files that are managed by vite.
+- This way, we can have HMR and a really nice developer UX.
+- Locales are now located in `/app/locales`, `i18n` configuration is moved to
+  `/app/config` and load the translations.

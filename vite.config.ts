@@ -11,9 +11,6 @@ export default defineConfig({
 			external: [/node:.*/, 'stream', 'crypto', 'fsevents'],
 		},
 	},
-	ssr: {
-		noExternal: ['remix-i18next'],
-	},
 	plugins: [
 		remix({
 			ignoredRouteFiles: ['**/*'],

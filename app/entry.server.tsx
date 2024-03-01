@@ -1,4 +1,3 @@
-import { resolve } from 'path'
 import { PassThrough } from 'stream'
 import {
 	createReadableStreamFromReadable,
@@ -9,13 +8,12 @@ import {
 import { RemixServer } from '@remix-run/react'
 import * as Sentry from '@sentry/remix'
 import { createInstance } from 'i18next'
-import FSBackend from 'i18next-fs-backend'
 import { isbot } from 'isbot'
 import { renderToPipeableStream } from 'react-dom/server'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
+import * as i18n from '#app/config/i18n'
 import { getEnv, init } from './utils/env.server.ts'
-import { i18n } from './utils/i18n.ts'
-import { i18next } from './utils/i18next.server.ts'
+import { i18next as i18nServer } from './utils/i18next.server.ts'
 import { getInstanceInfo } from './utils/litefs.server.ts'
 import { NonceProvider } from './utils/nonce-provider.ts'
 import { makeTimings } from './utils/timing.server.ts'
@@ -53,21 +51,15 @@ export default async function handleRequest(...args: DocRequestArgs) {
 	// completely unique instance and not share any state
 	const i18nInstance = createInstance()
 	// Then we could detect locale from the request
-	let lng = await i18next.getLocale(request)
+	let lng = await i18nServer.getLocale(request)
 	// And here we detect what namespaces the routes about to render want to use
-	let ns = i18next.getRouteNamespaces(remixContext)
+	let ns = i18nServer.getRouteNamespaces(remixContext)
 
-	await i18nInstance
-		.use(initReactI18next)
-		.use(FSBackend)
-		.init({
-			...i18n,
-			lng,
-			ns,
-			backend: {
-				loadPath: resolve('./public/locales/{{lng}}/{{ns}}.json'),
-			},
-		})
+	await i18nInstance.use(initReactI18next).init({
+		...i18n,
+		lng,
+		ns,
+	})
 
 	const nonce = String(loadContext.cspNonce) ?? undefined
 	return new Promise(async (resolve, reject) => {
