@@ -79,3 +79,9 @@ Update 23/02/2024
 		noExternal: ['remix-i18next'],
 	},
 ```
+
+Update 8/03/2024
+
+- i18next-parser is back. Thanks to @fredericrous for telling me that it was no
+  longer in the source code. Also note that 18next-parser does not support react
+  specific <Trans /> component.
