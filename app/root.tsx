@@ -27,9 +27,10 @@ import {
 import { withSentry } from '@sentry/remix'
 import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-// import { useChangeLanguage } from 'remix-i18next'
+import { useChangeLanguage } from 'remix-i18next/react'
 import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import { z } from 'zod'
+import * as i18n from '#app/config/i18n.ts'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
 import { EpicProgress } from './components/progress-bar.tsx'
 import { SearchBar } from './components/search-bar.tsx'
@@ -53,7 +54,6 @@ import { ClientHintCheck, getHints, useHints } from './utils/client-hints.tsx'
 import { prisma } from './utils/db.server.ts'
 import { getEnv } from './utils/env.server.ts'
 import { honeypot } from './utils/honeypot.server.ts'
-import { i18n, useChangeLanguage } from './utils/i18n.ts'
 import { i18next } from './utils/i18next.server.ts'
 import { combineHeaders, getDomainUrl, getUserImgSrc } from './utils/misc.tsx'
 import { useNonce } from './utils/nonce-provider.ts'
@@ -167,7 +167,7 @@ export const handle = {
 	// will need to load. This key can be a single string or an array of strings.
 	// TIP: In most cases, you should set this to your defaultNS from your i18n config
 	// or if you did not set one, set it to the i18next default namespace "translation"
-	i18n: 'common',
+	i18n: ['common'],
 }
 
 export const headers: HeadersFunction = ({ loaderHeaders }) => {
@@ -492,7 +492,6 @@ function LanguageDropDown() {
 export function ErrorBoundary() {
 	// the nonce doesn't rely on the loader so we can access that
 	const nonce = useNonce()
-	// const locale = useLocale()
 
 	// NOTE: you cannot use useLoaderData in an ErrorBoundary because the loader
 	// likely failed to run so we have to do the best we can.
