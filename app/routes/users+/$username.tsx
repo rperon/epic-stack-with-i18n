@@ -1,6 +1,7 @@
 import { invariantResponse } from '@epic-web/invariant'
 import { json, type LoaderFunctionArgs } from '@remix-run/node'
 import { Form, Link, useLoaderData, type MetaFunction } from '@remix-run/react'
+import { useTranslation } from 'react-i18next'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { Spacer } from '#app/components/spacer.tsx'
 import { Button } from '#app/components/ui/button.tsx'
@@ -33,6 +34,7 @@ export default function ProfileRoute() {
 	const user = data.user
 	const userDisplayName = user.name ?? user.username
 	const loggedInUser = useOptionalUser()
+	const { t } = useTranslation()
 	const isLoggedInUser = data.user.id === loggedInUser?.id
 
 	return (
@@ -65,7 +67,7 @@ export default function ProfileRoute() {
 						<Form action="/logout" method="POST" className="mt-3">
 							<Button type="submit" variant="link" size="pill">
 								<Icon name="exit" className="scale-125 max-md:scale-150">
-									Logout
+									{t('root.logout')}
 								</Icon>
 							</Button>
 						</Form>

@@ -1,14 +1,14 @@
 {
   "auth.invalidUsernameOrPassword": "Invalid username or password",
-  "marketing.title.start": "Check the",
-  "marketing.title.middle": "Getting Started",
   "marketing.title.end": "guide file for how to get your project off the ground!",
-  "root.login": "Log in",
-  "root.language": "Switch language",
-  "root.french": "French",
+  "marketing.title.middle": "Getting Started",
+  "marketing.title.start": "Check the",
   "root.english": "English",
-  "root.profile": "Profile",
+  "root.french": "French",
+  "root.language": "Switch language",
+  "root.login": "Log in",
   "root.logout": "Logout",
   "root.notes": "Notes",
+  "root.profile": "Profile",
   "search": "Search"
 }
