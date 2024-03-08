@@ -1,4 +1,5 @@
 import { type MetaFunction } from '@remix-run/node'
+import { useTranslation } from 'react-i18next'
 import {
 	Tooltip,
 	TooltipContent,
@@ -7,7 +8,6 @@ import {
 } from '#app/components/ui/tooltip.tsx'
 import { cn } from '#app/utils/misc.tsx'
 import { logos } from './logos/logos.ts'
-import { useTranslation } from 'react-i18next'
 
 export const meta: MetaFunction = () => [{ title: 'Epic Notes' }]
 
