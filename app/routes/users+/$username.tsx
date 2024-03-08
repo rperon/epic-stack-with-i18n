@@ -8,6 +8,7 @@ import { Icon } from '#app/components/ui/icon.tsx'
 import { prisma } from '#app/utils/db.server.ts'
 import { getUserImgSrc } from '#app/utils/misc.tsx'
 import { useOptionalUser } from '#app/utils/user.ts'
+import { useTranslation } from 'react-i18next'
 
 export async function loader({ params }: LoaderFunctionArgs) {
 	const user = await prisma.user.findFirst({
@@ -33,6 +34,7 @@ export default function ProfileRoute() {
 	const user = data.user
 	const userDisplayName = user.name ?? user.username
 	const loggedInUser = useOptionalUser()
+	const { t } = useTranslation()
 	const isLoggedInUser = data.user.id === loggedInUser?.id
 
 	return (
@@ -65,7 +67,7 @@ export default function ProfileRoute() {
 						<Form action="/logout" method="POST" className="mt-3">
 							<Button type="submit" variant="link" size="pill">
 								<Icon name="exit" className="scale-125 max-md:scale-150">
-									Logout
+									{t('root.logout')}
 								</Icon>
 							</Button>
 						</Form>

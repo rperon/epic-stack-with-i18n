@@ -1,14 +1,14 @@
 {
   "auth.invalidUsernameOrPassword": "Nom d'utilisateur ou mot de passe incorrect",
-  "marketing.title.start": "Consulter le fichier",
-  "marketing.title.middle": "Getting Started",
   "marketing.title.end": "pour savoir comment lancer votre projet !",
-  "root.login": "Se connecter",
-  "root.language": "Changer de langue",
-  "root.french": "Français",
+  "marketing.title.middle": "Getting Started",
+  "marketing.title.start": "Consulter le fichier",
   "root.english": "Anglais",
-  "root.profile": "Profil",
+  "root.french": "Français",
+  "root.language": "Changer de langue",
+  "root.login": "Se connecter",
   "root.logout": "Se déconnecter",
   "root.notes": "Notes",
+  "root.profile": "Profil",
   "search": "Rechercher"
 }
