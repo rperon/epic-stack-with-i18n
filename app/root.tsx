@@ -456,11 +456,11 @@ function ThemeSwitch({ userPreference }: { userPreference?: Theme | null }) {
 
 function LanguageDropDown() {
 	const { t, i18n } = useTranslation()
-	const submit = useSubmit()
+	const fetcher = useFetcher()
 
 	const onValueChange = (lang: string) => {
 		i18n.changeLanguage(lang)
-		submit(null, {
+		fetcher.submit(null, {
 			method: 'POST',
 			action: `/settings/change-language/${lang}`,
 		})
