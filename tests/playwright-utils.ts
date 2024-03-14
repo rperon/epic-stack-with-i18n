@@ -100,11 +100,10 @@ export const test = base.extend<{
 		await prisma.user.deleteMany({ where: { id: userId } })
 	},
 	i18next: async ({}, use) => {
+		const instance = i18next.createInstance()
 		await use(async options => {
-			console.log(options)
 			const lng = options?.lng ?? 'en'
-			const instance = i18next.createInstance()
-			const i18nInit = instance.init({ ns: [lng], ...i18n, ...options })
+			const i18nInit = await instance.init({ ns: [lng], ...i18n, ...options })
 			if (lng === 'en') {
 				instance.addResourceBundle('en', 'common', commonENJson, true) // to delete with PR#9
 			} else if (lng === 'fr') {
