@@ -7,7 +7,7 @@ This demonstrates how to use [i18next](https://www.i18next.com/) and
 [Epic Stack](https://github.com/epicweb-dev/epic-stack). It includes a dropdown
 menu to switch from one language to an another.
 
-This exemple is based on the usage of a cookie to save the user language but
+This example is based on the usage of a cookie to save the user language but
 there is other way to do so, like saving the language in the user object or
 using the url.
 
@@ -33,7 +33,7 @@ The important parts are:
 7. Inside a React function, you can translate string by using the hook
    `useTranslation` from `react-18next`. This hook export a `t` function that
    can be used like this `t('marketing.title.start')`. `_marketing+/index.tsx`
-   contains an exemple.
+   contains an example.
 8. Inside a loader or action function you can use your instance of RemixI18Next
    to get your translation like this :
    `const t = await i18next.getFixedT(request)`. Then you can use the `t`
