@@ -3,6 +3,7 @@ import { faker } from '@faker-js/faker'
 import { prisma } from '#app/utils/db.server.ts'
 import { readEmail } from '#tests/mocks/utils.ts'
 import { createUser, expect, test as base } from '#tests/playwright-utils.ts'
+import { i18n } from '#app/utils/i18n'
 
 const URL_REGEX = /(?<url>https?:\/\/[^\s$.?#].[^\s]*)/
 const CODE_REGEX = /Here's your verification code: (?<code>[\d\w]+)/
@@ -32,74 +33,95 @@ const test = base.extend<{
 	},
 })
 
-test('onboarding with link', async ({ page, getOnboardingData }) => {
-	const onboardingData = getOnboardingData()
+i18n.supportedLngs.forEach(locale => {
+	test.describe(`${locale} onboarding`, () => {
+		test.use({ locale })
 
-	await page.goto('/')
+		test(`${locale}: onboarding with link`, async ({
+			page,
+			getOnboardingData,
+			i18next,
+		}) => {
+			const onboardingData = getOnboardingData()
 
-	await page.getByRole('link', { name: /log in/i }).click()
-	await expect(page).toHaveURL(`/login`)
+			const t = await i18next({ lng: locale })
 
-	const createAccountLink = page.getByRole('link', {
-		name: /create an account/i,
+			await page.goto('/')
+			await expect(page.getByText(t('marketing.title.start'))).toBeVisible()
+
+			await page
+				.getByRole('link', { name: new RegExp(t('root.login'), 'i') })
+				.click()
+			await expect(page).toHaveURL(`/login`)
+
+			const createAccountLink = page.getByRole('link', {
+				name: /create an account/i,
+			})
+			await createAccountLink.click()
+
+			await expect(page).toHaveURL(`/signup`)
+
+			const emailTextbox = page.getByRole('textbox', { name: /email/i })
+			await emailTextbox.click()
+			await emailTextbox.fill(onboardingData.email)
+
+			await page.getByRole('button', { name: /submit/i }).click()
+			await expect(
+				page.getByRole('button', { name: /submit/i, disabled: true }),
+			).toBeVisible()
+			await expect(page.getByText(/check your email/i)).toBeVisible()
+
+			const email = await readEmail(onboardingData.email)
+			invariant(email, 'Email not found')
+			expect(email.to).toBe(onboardingData.email.toLowerCase())
+			expect(email.from).toBe('hello@epicstack.dev')
+			expect(email.subject).toMatch(/welcome/i)
+			const onboardingUrl = extractUrl(email.text)
+			invariant(onboardingUrl, 'Onboarding URL not found')
+			await page.goto(onboardingUrl)
+
+			await expect(page).toHaveURL(/\/verify/)
+
+			await page
+				.getByRole('main')
+				.getByRole('button', { name: /submit/i })
+				.click()
+
+			await expect(page).toHaveURL(`/onboarding`)
+			await page
+				.getByRole('textbox', { name: /^username/i })
+				.fill(onboardingData.username)
+
+			await page
+				.getByRole('textbox', { name: /^name/i })
+				.fill(onboardingData.name)
+
+			await page.getByLabel(/^password/i).fill(onboardingData.password)
+
+			await page.getByLabel(/^confirm password/i).fill(onboardingData.password)
+
+			await page.getByLabel(/terms/i).check()
+
+			await page.getByLabel(/remember me/i).check()
+
+			await page.getByRole('button', { name: /Create an account/i }).click()
+
+			await expect(page).toHaveURL(`/`)
+
+			await page.getByRole('link', { name: onboardingData.name }).click()
+			await page
+				.getByRole('menuitem', { name: new RegExp(t('root.profile'), 'i') })
+				.click()
+
+			await expect(page).toHaveURL(`/users/${onboardingData.username}`)
+
+			await page.getByRole('link', { name: onboardingData.name }).click()
+			await page
+				.getByRole('menuitem', { name: new RegExp(t('root.logout'), 'i') })
+				.click()
+			await expect(page).toHaveURL(`/`)
+		})
 	})
-	await createAccountLink.click()
-
-	await expect(page).toHaveURL(`/signup`)
-
-	const emailTextbox = page.getByRole('textbox', { name: /email/i })
-	await emailTextbox.click()
-	await emailTextbox.fill(onboardingData.email)
-
-	await page.getByRole('button', { name: /submit/i }).click()
-	await expect(
-		page.getByRole('button', { name: /submit/i, disabled: true }),
-	).toBeVisible()
-	await expect(page.getByText(/check your email/i)).toBeVisible()
-
-	const email = await readEmail(onboardingData.email)
-	invariant(email, 'Email not found')
-	expect(email.to).toBe(onboardingData.email.toLowerCase())
-	expect(email.from).toBe('hello@epicstack.dev')
-	expect(email.subject).toMatch(/welcome/i)
-	const onboardingUrl = extractUrl(email.text)
-	invariant(onboardingUrl, 'Onboarding URL not found')
-	await page.goto(onboardingUrl)
-
-	await expect(page).toHaveURL(/\/verify/)
-
-	await page
-		.getByRole('main')
-		.getByRole('button', { name: /submit/i })
-		.click()
-
-	await expect(page).toHaveURL(`/onboarding`)
-	await page
-		.getByRole('textbox', { name: /^username/i })
-		.fill(onboardingData.username)
-
-	await page.getByRole('textbox', { name: /^name/i }).fill(onboardingData.name)
-
-	await page.getByLabel(/^password/i).fill(onboardingData.password)
-
-	await page.getByLabel(/^confirm password/i).fill(onboardingData.password)
-
-	await page.getByLabel(/terms/i).check()
-
-	await page.getByLabel(/remember me/i).check()
-
-	await page.getByRole('button', { name: /Create an account/i }).click()
-
-	await expect(page).toHaveURL(`/`)
-
-	await page.getByRole('link', { name: onboardingData.name }).click()
-	await page.getByRole('menuitem', { name: /profile/i }).click()
-
-	await expect(page).toHaveURL(`/users/${onboardingData.username}`)
-
-	await page.getByRole('link', { name: onboardingData.name }).click()
-	await page.getByRole('menuitem', { name: /logout/i }).click()
-	await expect(page).toHaveURL(`/`)
 })
 
 test('onboarding with a short code', async ({ page, getOnboardingData }) => {
@@ -131,7 +153,7 @@ test('onboarding with a short code', async ({ page, getOnboardingData }) => {
 	await expect(page).toHaveURL(`/onboarding`)
 })
 
-test('login as existing user', async ({ page, insertNewUser }) => {
+test('login as existing user', async ({ page, insertNewUser, i18next }) => {
 	const password = faker.internet.password()
 	const user = await insertNewUser({ password })
 	invariant(user.name, 'User name not found')

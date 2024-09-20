@@ -1,5 +1,6 @@
 import { test as base } from '@playwright/test'
 import { type User as UserModel } from '@prisma/client'
+import i18next, { type InitOptions, type TFunction } from 'i18next'
 import * as setCookieParser from 'set-cookie-parser'
 import {
 	getPasswordHash,
@@ -7,7 +8,10 @@ import {
 	sessionKey,
 } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
+import { i18n } from '#app/utils/i18n.ts'
 import { authSessionStorage } from '#app/utils/session.server.ts'
+import commonENJson from '#public/locales/en/common.json' assert { type: 'json' }
+import commonFRJson from '#public/locales/fr/common.json' assert { type: 'json' }
 import { createUser } from './db-utils.ts'
 
 export * from './db-utils.ts'
@@ -59,6 +63,7 @@ async function getOrInsertUser({
 export const test = base.extend<{
 	insertNewUser(options?: GetOrInsertUserOptions): Promise<User>
 	login(options?: GetOrInsertUserOptions): Promise<User>
+	i18next(options?: InitOptions): Promise<TFunction>
 }>({
 	insertNewUser: async ({}, use) => {
 		let userId: string | undefined = undefined
@@ -93,6 +98,19 @@ export const test = base.extend<{
 			return user
 		})
 		await prisma.user.deleteMany({ where: { id: userId } })
+	},
+	i18next: async ({}, use) => {
+		const instance = i18next.createInstance()
+		await use(async options => {
+			const lng = options?.lng ?? 'en'
+			const i18nInit = await instance.init({ ns: [lng], ...i18n, ...options })
+			if (lng === 'en') {
+				instance.addResourceBundle('en', 'common', commonENJson, true) // to delete with PR#9
+			} else if (lng === 'fr') {
+				instance.addResourceBundle(lng, 'common', commonFRJson, true) // to delete with PR#9
+			}
+			return i18nInit
+		})
 	},
 })
 export const { expect } = test
